@@ -1,0 +1,169 @@
+/* MarkdownRenderer.css */
+
+.markdown-content {
+    color: var(--text-primary);
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+.markdown-content p {
+    margin-bottom: 1rem;
+}
+
+/* Headings */
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+    color: var(--text-primary);
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+}
+
+.markdown-content h1 {
+    font-size: 1.8rem;
+    border-bottom: 1px solid var(--glass-border);
+    padding-bottom: 0.5rem;
+}
+
+.markdown-content h2 {
+    font-size: 1.5rem;
+    border-bottom: 1px solid var(--glass-border);
+    padding-bottom: 0.5rem;
+}
+
+.markdown-content h3 {
+    font-size: 1.3rem;
+}
+
+.markdown-content h4 {
+    font-size: 1.1rem;
+}
+
+/* Lists */
+.markdown-content ul,
+.markdown-content ol {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+}
+
+.markdown-content li {
+    margin-bottom: 0.25rem;
+}
+
+/* Links */
+.markdown-content a {
+    color: var(--primary);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.markdown-content a:hover {
+    color: var(--primary-hover);
+    text-decoration: underline;
+}
+
+/* Blockquotes */
+.markdown-content blockquote {
+    margin: 1rem 0;
+    padding: 0.5rem 1rem;
+    border-left: 4px solid var(--primary);
+    background: rgba(255, 255, 255, 0.05);
+    /* Slight background for glass effect */
+    border-radius: 0 4px 4px 0;
+    color: var(--text-secondary);
+}
+
+/* Tables */
+.markdown-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    overflow-x: auto;
+    display: block;
+    /* For responsiveness */
+}
+
+.markdown-content th,
+.markdown-content td {
+    padding: 0.75rem;
+    border: 1px solid var(--glass-border);
+    text-align: left;
+}
+
+.markdown-content th {
+    background: rgba(255, 255, 255, 0.05);
+    font-weight: 600;
+}
+
+.markdown-content tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Inline Code */
+.markdown-content code:not(pre code) {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-family: 'Fira Code', monospace, sans-serif;
+    font-size: 0.9em;
+    color: var(--accent);
+}
+
+/* Code Blocks */
+.markdown-content pre {
+    margin: 1rem 0;
+    background: #1e1e1e;
+    /* Darker background for code blocks */
+    border-radius: 8px;
+    overflow-x: auto;
+    border: 1px solid var(--glass-border);
+}
+
+.code-block-wrapper {
+    margin: 1rem 0;
+    background: #1e1e1e;
+    border-radius: 8px;
+    border: 1px solid var(--glass-border);
+    overflow: hidden;
+}
+
+.code-block-header {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--glass-border);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-family: monospace;
+    text-transform: uppercase;
+}
+
+.code-block-wrapper pre {
+    margin: 0;
+    padding: 1rem;
+    background: transparent;
+    border: none;
+}
+
+.markdown-content pre code {
+    color: #d4d4d4;
+    /* Default text color for code */
+    background-color: transparent;
+    /* Ensure no background from global styles */
+    font-family: 'Fira Code', monospace, sans-serif;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+/* Add some dark mode specific overrides if needed, assuming global dark theme */
+
+/* Horizontal Rule */
+.markdown-content hr {
+    border: 0;
+    height: 1px;
+    background: var(--glass-border);
+    margin: 2rem 0;
+}

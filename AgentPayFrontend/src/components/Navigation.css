@@ -1,0 +1,158 @@
+.navigation {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky);
+    background: white;
+    border-bottom: 1px solid black;
+    padding: var(--space-md) 0;
+}
+
+.nav-container {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 0 var(--space-xl);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-xl);
+}
+
+/* Logo */
+.nav-logo {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    text-decoration: none;
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-extrabold);
+    transition: all var(--transition-base);
+    position: absolute;
+    left: var(--space-xl);
+    font-family: var(--font-mono);
+}
+
+.logo-icon {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    background: transparent;
+    transition: all var(--transition-base);
+    border: 2px solid black;
+    border-radius: 0px;
+    padding: 2px;
+}
+
+.logo-text {
+    color: black;
+}
+
+.logo-accent {
+    color: black;
+}
+
+.nav-logo:hover {
+    transform: scale(1.02);
+}
+
+.nav-logo:hover .logo-icon {
+    background: black;
+    filter: invert(1);
+    transform: rotate(5deg);
+}
+
+/* Nav Links */
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xl);
+}
+
+.nav-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-base);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: 0px;
+    transition: all var(--transition-base);
+    position: relative;
+    font-family: var(--font-mono);
+    border: 1px solid transparent;
+}
+
+.nav-link::after {
+    display: none;
+}
+
+.nav-link:hover {
+    color: black;
+    border: 1px solid black;
+    box-shadow: 2px 2px 0px black;
+    background: white;
+}
+
+.nav-link.active {
+    color: white;
+    background: black;
+    border: 1px solid black;
+    box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+}
+
+/* Wallet Button */
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.wallet-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-lg);
+    background: white;
+    border: 1px solid black;
+    border-radius: 0px;
+    color: black;
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    font-family: var(--font-mono);
+    box-shadow: 2px 2px 0px black;
+}
+
+.wallet-btn:hover {
+    background: black;
+    color: white;
+    box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.5);
+    transform: translate(-1px, -1px);
+}
+
+.wallet-btn:active {
+    transform: translate(0, 0);
+    box-shadow: none;
+}
+
+.wallet-icon {
+    font-size: var(--font-size-lg);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .nav-container {
+        padding: 0 var(--space-md);
+    }
+
+    .nav-links {
+        display: none;
+    }
+
+    .wallet-text {
+        display: none;
+    }
+
+    .wallet-btn {
+        padding: var(--space-sm);
+    }
+}

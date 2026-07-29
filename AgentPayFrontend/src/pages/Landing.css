@@ -1,0 +1,390 @@
+/* Landing.css - Professional Swiss/Brutalist (White/Black) */
+.landing {
+    min-height: 100vh;
+    background-color: #ffffff;
+    color: #000000;
+    overflow-x: hidden;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    position: relative;
+    /* Subtle Grid Background */
+    background-image:
+        linear-gradient(#f0f0f0 1px, transparent 1px),
+        linear-gradient(90deg, #f0f0f0 1px, transparent 1px);
+    background-size: 40px 40px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+}
+
+/* Hero Section */
+.hero {
+    padding: 180px 0 120px;
+    text-align: left;
+    border-bottom: 2px solid #000;
+}
+
+.hero-title {
+    font-size: 6rem;
+    font-weight: 800;
+    line-height: 0.9;
+    margin-bottom: 48px;
+    letter-spacing: -0.04em;
+    text-transform: uppercase;
+    color: #000;
+}
+
+.hero-subtitle {
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: #333;
+    max-width: 700px;
+    margin: 0 0 60px 0;
+    line-height: 1.4;
+    border-left: 6px solid #000;
+    padding-left: 32px;
+}
+
+.hero-ctas {
+    display: flex;
+    justify-content: flex-start;
+    gap: 24px;
+}
+
+/* Buttons */
+.btn-primary-glow {
+    box-shadow: none !important;
+    border: 3px solid #000 !important;
+    background: #000 !important;
+    color: #fff !important;
+    border-radius: 0 !important;
+    text-transform: uppercase;
+    font-weight: 700 !important;
+    padding: 24px 48px !important;
+    font-size: 1.1rem !important;
+    letter-spacing: 0.05em;
+    transition: all 0.1s ease !important;
+}
+
+.btn-primary-glow:hover {
+    background: #fff !important;
+    color: #000 !important;
+    transform: translate(-6px, -6px) !important;
+    box-shadow: 8px 8px 0 0 #000 !important;
+}
+
+.landing .btn-secondary {
+    background: transparent !important;
+    border: 3px solid #000 !important;
+    color: #000 !important;
+    border-radius: 0 !important;
+    font-family: 'Inter', sans-serif !important;
+    text-transform: uppercase;
+    font-weight: 700 !important;
+    padding: 24px 48px !important;
+    font-size: 1.1rem !important;
+    transition: all 0.1s ease !important;
+}
+
+.landing .btn-secondary:hover {
+    background: #000 !important;
+    color: #fff !important;
+    transform: translate(-6px, -6px) !important;
+    box-shadow: 8px 8px 0 0 #000 !important;
+}
+
+.landing button {
+    border-radius: 0 !important;
+}
+
+/* Protocol Section (AP2 / BITE v2) */
+.protocol-section {
+    padding: 120px 0;
+    border-bottom: 2px solid #000;
+}
+
+.section-label {
+    font-size: 1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 16px;
+    display: block;
+    color: #555;
+}
+
+.section-title {
+    font-size: 4rem;
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    color: #000;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    line-height: 0.9;
+}
+
+.section-subtitle {
+    font-size: 1.5rem;
+    font-weight: 500;
+    margin-bottom: 60px;
+    max-width: 800px;
+    color: #333;
+}
+
+/* Step List (Vertical Flow) */
+.step-list {
+    display: flex;
+    flex-direction: column;
+    border-top: 4px solid #000;
+}
+
+.step-item {
+    display: grid;
+    grid-template-columns: 80px 1fr 2fr;
+    /* Number - Title - Desc */
+    padding: 40px 0;
+    border-bottom: 1px solid #ccc;
+    align-items: flex-start;
+    transition: background 0.2s ease;
+}
+
+.step-item:hover {
+    background: #000;
+    color: #fff;
+    padding-left: 20px;
+    /* Indent on hover */
+    padding-right: 20px;
+}
+
+.step-item:hover .step-number {
+    color: #fff;
+    border-color: #fff;
+}
+
+.step-item:hover .step-title {
+    color: #fff;
+}
+
+.step-item:hover .step-desc {
+    color: #ddd;
+}
+
+.step-number {
+    font-size: 1.5rem;
+    font-weight: 900;
+    width: 50px;
+    height: 50px;
+    border: 3px solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    /* Or specific shape? Swiss usually circle or square numbers */
+    border-radius: 0;
+    /* Brutalist Square */
+}
+
+.step-title {
+    font-size: 2rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    line-height: 1;
+}
+
+.step-desc {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    color: #444;
+}
+
+/* Swiss Grid (Static Grid Layout) */
+.swiss-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    /* Default 2 columns */
+    border: 4px solid #000;
+    gap: 0;
+    /* Touching borders */
+    background: #000;
+    /* For gap lines if needed */
+}
+
+.grid-cell {
+    background: #fff;
+    padding: 48px;
+    border: 1px solid #000;
+    /* Inner borders */
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    transition: all 0.2s ease;
+}
+
+.grid-cell:hover {
+    background: #000;
+    color: #fff;
+}
+
+.grid-cell:hover h3,
+.grid-cell:hover p,
+.grid-cell:hover .cell-icon {
+    color: #fff;
+}
+
+.grid-cell.large {
+    grid-column: span 2;
+}
+
+.cell-icon {
+    width: 64px;
+    height: 64px;
+    color: #000;
+}
+
+.cell-title {
+    font-size: 2rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    line-height: 0.9;
+}
+
+.cell-desc {
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #444;
+}
+
+/* 3-Column Grid Variant */
+.swiss-grid.col-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+/* 4-Column Grid Variant */
+.swiss-grid.col-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+/* Dark Variant for BITE v2 */
+.grid-cell.dark {
+    background: #000 !important;
+    color: #fff !important;
+    border-color: #333 !important;
+}
+
+.grid-cell.dark .cell-title,
+.grid-cell.dark .cell-desc,
+.grid-cell.dark h3,
+.grid-cell.dark p {
+    color: #fff !important;
+}
+
+.grid-cell.dark:hover {
+    background: #fff !important;
+    color: #000 !important;
+}
+
+.grid-cell.dark:hover .cell-title,
+.grid-cell.dark:hover .cell-desc,
+.grid-cell.dark:hover h3,
+.grid-cell.dark:hover p {
+    color: #000 !important;
+}
+
+/* Footer (Kept same mostly) */
+.footer {
+    border-top: 8px solid #000;
+    padding: 100px 0 60px;
+    background: #fff;
+    color: #000;
+}
+
+.footer-content {
+    display: flex;
+    justify-content: space-between;
+    /* Push content to edges */
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 60px;
+    width: 100%;
+}
+
+.footer-brand {
+    flex: 1;
+    min-width: 300px;
+}
+
+.footer-logo {
+    border: 4px solid #000;
+    padding: 16px 32px;
+    background: #000;
+    color: #fff;
+    font-weight: 900;
+    font-size: 2rem;
+    display: inline-block;
+    margin-bottom: 32px;
+}
+
+.footer-links {
+    display: flex;
+    gap: 100px;
+    /* More space between columns */
+}
+
+.footer-column h4 {
+    font-weight: 900;
+    text-transform: uppercase;
+    border-bottom: 3px solid #000;
+    padding-bottom: 12px;
+    margin-bottom: 24px;
+}
+
+.footer-column a {
+    display: block;
+    color: #000;
+    font-weight: 600;
+    text-decoration: none;
+    margin-bottom: 12px;
+}
+
+.footer-column a:hover {
+    background: #000;
+    color: #fff;
+    padding-left: 8px;
+}
+
+@media (max-width: 1024px) {
+
+    .swiss-grid.col-3,
+    .swiss-grid.col-4 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .hero-title {
+        font-size: 4rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .step-item {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .swiss-grid,
+    .swiss-grid.col-3,
+    .swiss-grid.col-4 {
+        grid-template-columns: 1fr;
+    }
+
+    .hero-title {
+        font-size: 3rem;
+    }
+
+    .hero-ctas {
+        flex-direction: column;
+    }
+}

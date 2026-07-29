@@ -1,0 +1,112 @@
+/* ProcessingMessage.css */
+.processing-message-container {
+    display: flex;
+    justify-content: flex-start;
+    padding: var(--space-md);
+    width: 100%;
+    max-width: 1000px;
+    margin: 0 auto;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.processing-message-card {
+    background: transparent;
+    border: 1px dashed var(--glass-border);
+    padding: var(--space-md) var(--space-lg);
+    border-radius: 0px;
+    max-width: 80%;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    position: relative;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.5); /* Semi-transparent white */
+}
+
+/* Status variants */
+.processing-message-card.status-payment {
+    border-color: #ffd700; /* Gold */
+    background: rgba(255, 236, 179, 0.3);
+}
+
+.processing-message-card.status-success {
+    border-color: #4caf50; /* Green */
+    background: rgba(200, 230, 201, 0.3);
+}
+
+.processing-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.processing-icon-container {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.processing-text {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    font-weight: bold;
+}
+
+/* Spinner */
+.spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    border-left-color: black;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Toggle Button */
+.details-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    text-decoration: underline;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.details-toggle:hover {
+    color: black;
+}
+
+/* Details Section */
+.processing-details {
+    margin-top: var(--space-sm);
+    padding: var(--space-sm);
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid var(--glass-border);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    animation: slideDown 0.2s ease-out;
+}
+
+.details-json {
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 200px;
+    overflow-y: auto;
+    background: #f5f5f5;
+    padding: var(--space-xs);
+    border: 1px solid #ddd;
+}

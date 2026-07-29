@@ -1,0 +1,471 @@
+.ap2-receipt {
+    margin: 12px 0;
+    background: #0a0a0f;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    border-radius: 12px;
+    overflow: hidden;
+    font-family: 'Inter',
+        -apple-system,
+        sans-serif;
+}
+
+.ap2-receipt.escrow-mode {
+    border-color: rgba(168, 85, 247, 0.15);
+}
+
+.ap2-receipt-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s;
+}
+
+.ap2-receipt-header:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.ap2-receipt-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.protocol-badges {
+    display: flex;
+    gap: 4px;
+}
+
+/* Protocol Tags — used everywhere */
+.proto-tag {
+    font-size: 0.68em;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 3px 7px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    line-height: 1;
+}
+
+.proto-tag.sm {
+    font-size: 0.6em;
+    padding: 2px 5px;
+}
+
+.proto-tag.proto-ap2 {
+    background: linear-gradient(135deg, #6c5ce7, #a855f7);
+    color: white;
+}
+
+.proto-tag.proto-bite {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #1a1a2e;
+}
+
+.ap2-receipt-title .receipt-label {
+    font-size: 0.85em;
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 500;
+}
+
+.ap2-receipt-title .receipt-id {
+    font-size: 0.72em;
+    color: rgba(255, 255, 255, 0.3);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.ap2-outcome {
+    font-size: 0.75em;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+}
+
+.ap2-outcome.success {
+    background: rgba(76, 175, 80, 0.15);
+    color: #66bb6a;
+}
+
+.ap2-outcome.failed {
+    background: rgba(244, 67, 54, 0.15);
+    color: #ef5350;
+}
+
+.ap2-outcome.pending {
+    background: rgba(255, 193, 7, 0.15);
+    color: #ffca28;
+}
+
+/* Protocol Legend */
+.protocol-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 16px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.legend-desc {
+    font-size: 0.7em;
+    color: rgba(255, 255, 255, 0.35);
+}
+
+/* Stepper */
+.ap2-stepper {
+    padding: 0 16px 16px;
+}
+
+.ap2-phase {
+    display: flex;
+    gap: 14px;
+    position: relative;
+}
+
+.ap2-phase:not(:last-child) {
+    padding-bottom: 0;
+}
+
+/* Vertical line connecting phases */
+.ap2-phase-indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 28px;
+}
+
+.ap2-phase-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+    z-index: 1;
+    transition: all 0.3s;
+}
+
+.ap2-phase-dot.complete {
+    background: linear-gradient(135deg, #43a047, #66bb6a);
+    color: white;
+    box-shadow: 0 0 12px rgba(76, 175, 80, 0.3);
+}
+
+.ap2-phase-dot.bite-dot.complete {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #1a1a2e;
+    box-shadow: 0 0 14px rgba(245, 158, 11, 0.35);
+}
+
+.ap2-phase-dot.failed {
+    background: linear-gradient(135deg, #e53935, #ef5350);
+    color: white;
+    box-shadow: 0 0 12px rgba(244, 67, 54, 0.3);
+}
+
+.ap2-phase-dot.pending {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.25);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+}
+
+.ap2-phase-dot.skipped {
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.15);
+}
+
+.ap2-phase-line {
+    width: 2px;
+    flex-grow: 1;
+    min-height: 16px;
+    margin: 2px 0;
+}
+
+.ap2-phase-line.complete {
+    background: linear-gradient(to bottom, #43a047, rgba(67, 160, 71, 0.2));
+}
+
+.ap2-phase-line.bite-line.complete {
+    background: linear-gradient(to bottom, #f59e0b, rgba(245, 158, 11, 0.2));
+}
+
+.ap2-phase-line.failed {
+    background: linear-gradient(to bottom, #e53935, rgba(229, 57, 53, 0.2));
+}
+
+.ap2-phase-line.pending,
+.ap2-phase-line.skipped {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+/* Phase content */
+.ap2-phase-content {
+    flex: 1;
+    padding-bottom: 16px;
+}
+
+/* BITE phase background accent */
+.bite-phase .ap2-phase-content {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.03), transparent);
+    border-radius: 8px;
+    padding: 8px 12px 16px;
+    margin: -4px 0 0;
+    border-left: 2px solid rgba(245, 158, 11, 0.15);
+}
+
+.ap2-phase-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.phase-name-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ap2-phase-name {
+    font-size: 0.82em;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.ap2-phase-time {
+    font-size: 0.7em;
+    color: rgba(255, 255, 255, 0.3);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.ap2-phase-details {
+    font-size: 0.78em;
+    color: rgba(255, 255, 255, 0.5);
+    line-height: 1.6;
+}
+
+.ap2-phase-details .detail-item {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 2px;
+}
+
+.ap2-phase-details .detail-key {
+    color: rgba(255, 255, 255, 0.35);
+    min-width: 70px;
+    flex-shrink: 0;
+}
+
+.ap2-phase-details .detail-val {
+    color: rgba(255, 255, 255, 0.65);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    word-break: break-all;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ap2-phase-details .detail-val a {
+    color: #a855f7;
+    text-decoration: none;
+}
+
+.ap2-phase-details .detail-val a:hover {
+    text-decoration: underline;
+}
+
+/* Inline badges */
+.inline-badge {
+    font-size: 0.8em;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+}
+
+.escrow-inline {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.free-tag {
+    color: rgba(255, 255, 255, 0.4);
+    font-style: italic;
+}
+
+.sig-preview {
+    color: rgba(168, 85, 247, 0.6) !important;
+}
+
+/* Escrow hold banner in settlement */
+.escrow-hold-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(217, 119, 6, 0.04));
+    border: 1px solid rgba(245, 158, 11, 0.15);
+    border-radius: 8px;
+    font-size: 0.9em;
+    color: #f59e0b;
+}
+
+.escrow-hold-icon {
+    font-size: 1.1em;
+}
+
+/* Escrow Release Section in delivery */
+.escrow-release-section {
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: rgba(15, 15, 25, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+}
+
+.escrow-release-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.escrow-release-label {
+    font-size: 0.85em;
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 500;
+}
+
+.escrow-release-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.9em;
+    margin-bottom: 6px;
+}
+
+.escrow-release-status .status-icon {
+    font-size: 1.1em;
+}
+
+.escrow-release-status.status-released {
+    background: rgba(76, 175, 80, 0.1);
+    color: #66bb6a;
+    border-left: 3px solid #66bb6a;
+}
+
+.escrow-release-status.status-refunded {
+    background: rgba(255, 193, 7, 0.1);
+    color: #ffca28;
+    border-left: 3px solid #ffca28;
+}
+
+.escrow-release-status.status-self-settled {
+    background: rgba(76, 175, 80, 0.08);
+    color: #66bb6a;
+    border-left: 3px solid rgba(76, 175, 80, 0.4);
+}
+
+.escrow-release-status.status-release-failed,
+.escrow-release-status.status-refund-failed {
+    background: rgba(244, 67, 54, 0.1);
+    color: #ef5350;
+    border-left: 3px solid #ef5350;
+}
+
+.escrow-release-status.status-no-key {
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.4);
+    border-left: 3px solid rgba(255, 255, 255, 0.1);
+}
+
+.ap2-error-msg {
+    font-size: 0.78em;
+    color: #ef5350;
+    padding: 6px 10px;
+    background: rgba(244, 67, 54, 0.08);
+    border-radius: 6px;
+    border-left: 3px solid #ef5350;
+    margin-top: 4px;
+}
+
+/* JSON audit view */
+.ap2-audit-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+    font-size: 0.72em;
+    color: rgba(255, 255, 255, 0.3);
+    gap: 6px;
+    transition: color 0.2s;
+    user-select: none;
+}
+
+.ap2-audit-toggle:hover {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.ap2-audit-json {
+    padding: 0 16px 16px;
+}
+
+.ap2-audit-json pre {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 0.7em;
+    color: rgba(255, 255, 255, 0.5);
+    overflow-x: auto;
+    line-height: 1.5;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    max-height: 300px;
+    overflow-y: auto;
+    margin: 0;
+}
+
+.ap2-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.72em;
+    cursor: pointer;
+    margin-bottom: 8px;
+    transition: all 0.2s;
+}
+
+.ap2-copy-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.ap2-copy-btn.copied {
+    color: #66bb6a;
+    border-color: rgba(76, 175, 80, 0.3);
+}

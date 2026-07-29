@@ -1,0 +1,163 @@
+/* Worker Panel — Brutalist Mono Theme */
+
+.worker-panel {
+    border-top: 1px solid #cccccc;
+    padding: var(--space-sm) var(--space-md);
+    background: white;
+    font-family: var(--font-mono);
+}
+
+.worker-panel-header {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: #666666;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: var(--space-xs);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.worker-count {
+    font-size: var(--font-size-xs);
+    background: black;
+    color: white;
+    padding: 0 6px;
+    font-weight: 700;
+    min-width: 18px;
+    text-align: center;
+}
+
+.worker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.worker-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border: 1px solid #cccccc;
+    font-size: var(--font-size-xs);
+    transition: border-color var(--transition-fast);
+}
+
+.worker-item.running {
+    border-color: black;
+    background: #fafafa;
+}
+
+.worker-item.done {
+    border-color: #4CAF50;
+}
+
+.worker-item.failed {
+    border-color: #ff0000;
+}
+
+.worker-dot {
+    width: 8px;
+    height: 8px;
+    flex-shrink: 0;
+}
+
+.worker-item.idle .worker-dot {
+    background: #cccccc;
+}
+
+.worker-item.starting .worker-dot {
+    background: #666666;
+}
+
+.worker-item.running .worker-dot {
+    background: black;
+    animation: workerPulse 1s ease-in-out infinite;
+}
+
+.worker-item.done .worker-dot {
+    background: #4CAF50;
+}
+
+.worker-item.failed .worker-dot {
+    background: #ff0000;
+}
+
+@keyframes workerPulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.3;
+    }
+}
+
+.worker-info {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+}
+
+.worker-meta-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85em;
+    color: #888888;
+}
+
+.worker-wallet-id {
+    font-weight: 700;
+    color: #666666;
+}
+
+.worker-wallet-addr {
+    font-family: var(--font-mono);
+    opacity: 0.7;
+}
+
+.worker-task-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.worker-tool-name {
+    font-weight: 700;
+    color: black;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+}
+
+.worker-phase {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.85em;
+    color: #666;
+}
+
+.worker-balances {
+    display: flex;
+    gap: 6px;
+    font-size: 0.85em;
+    color: #888888;
+    font-family: var(--font-mono);
+}
+
+.worker-elapsed {
+    color: #888888;
+    font-size: 0.85em;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}

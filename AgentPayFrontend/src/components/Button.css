@@ -1,0 +1,100 @@
+.btn {
+    font-family: var(--font-body);
+    font-weight: var(--font-weight-bold);
+    border: 1px solid black;
+    border-radius: 0px;
+    cursor: pointer;
+    transition: all var(--transition-base);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    text-decoration: none;
+    white-space: nowrap;
+    position: relative;
+    overflow: hidden;
+    text-transform: uppercase;
+    box-shadow: 2px 2px 0px black;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #eeeeee;
+    color: #999999;
+    box-shadow: none;
+}
+
+/* Sizes */
+.btn-sm {
+    padding: var(--space-sm) var(--space-xl);
+    font-size: var(--font-size-sm);
+}
+
+.btn-md {
+    padding: var(--space-md) var(--space-2xl);
+    font-size: var(--font-size-base);
+}
+
+.btn-lg {
+    padding: var(--space-lg) var(--space-2xl);
+    font-size: var(--font-size-lg);
+}
+
+/* Primary - Black */
+.btn-primary {
+    background: black;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: white;
+    color: black;
+    box-shadow: 4px 4px 0px black;
+    transform: translate(-1px, -1px);
+}
+
+.btn-primary:active {
+    transform: translate(0, 0);
+    box-shadow: 1px 1px 0px black;
+}
+
+/* Secondary - Outlined */
+.btn-secondary {
+    background: white;
+    color: black;
+    border: 1px solid black;
+}
+
+.btn-secondary:hover {
+    background: #eeeeee;
+    box-shadow: 4px 4px 0px black;
+    transform: translate(-1px, -1px);
+}
+
+/* Ghost - Minimal */
+.btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid transparent;
+    box-shadow: none;
+}
+
+.btn-ghost:hover {
+    color: black;
+    text-decoration: underline;
+    background: rgba(0, 0, 0, 0.05);
+}
+
+/* Accent - Alternative */
+.btn-accent {
+    background: white;
+    color: black;
+    border: 1px solid black;
+}
+
+.btn-accent:hover {
+    background: black;
+    color: white;
+    box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.5);
+}

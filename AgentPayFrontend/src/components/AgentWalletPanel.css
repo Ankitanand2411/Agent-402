@@ -1,0 +1,166 @@
+/* Agent Wallet Panel — Brutalist Mono Theme */
+
+.agent-wallet {
+    border-top: 2px solid black;
+    padding: var(--space-md);
+    background: white;
+    margin-top: auto;
+    font-family: var(--font-mono);
+}
+
+.agent-wallet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-sm);
+}
+
+.agent-wallet-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: #666666;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.agent-wallet-label .auto-badge {
+    font-size: var(--font-size-xs);
+    padding: 1px 6px;
+    background: black;
+    color: white;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+.agent-wallet-address {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: #888888;
+    cursor: pointer;
+    transition: color var(--transition-fast);
+}
+
+.agent-wallet-address:hover {
+    color: black;
+    text-decoration: underline;
+}
+
+.agent-wallet-balances {
+    display: flex;
+    gap: var(--space-lg);
+    margin-bottom: var(--space-sm);
+}
+
+.balance-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.balance-label {
+    font-size: var(--font-size-xs);
+    color: #666666;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+.balance-value {
+    font-size: var(--font-size-xl);
+    font-weight: 900;
+    color: black;
+    font-family: var(--font-mono);
+}
+
+.balance-value.low {
+    color: #ff0000;
+}
+
+.agent-wallet-actions {
+    display: flex;
+    gap: var(--space-sm);
+    align-items: stretch;
+}
+
+.agent-wallet-actions .fund-input {
+    width: 60px;
+    padding: 8px;
+    border: 2px solid black;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    outline: none;
+    background: white;
+    color: black;
+    text-align: center;
+    -moz-appearance: textfield;
+}
+
+.agent-wallet-actions .fund-input::-webkit-outer-spin-button,
+.agent-wallet-actions .fund-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.agent-wallet-actions .fund-input:focus {
+    background: #f0f0f0;
+}
+
+.agent-wallet-actions button {
+    flex: 1;
+    padding: 8px 12px;
+    border: 2px solid black;
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    background: white;
+    color: black;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.agent-wallet-actions button:hover {
+    background: black;
+    color: white;
+    box-shadow: var(--shadow-sm);
+}
+
+.agent-wallet-actions button.fund-btn {
+    background: black;
+    color: white;
+}
+
+.agent-wallet-actions button.fund-btn:hover {
+    background: #333333;
+    box-shadow: var(--shadow-sm);
+}
+
+.agent-wallet-actions button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.agent-wallet-status {
+    font-size: var(--font-size-xs);
+    margin-top: var(--space-sm);
+    font-weight: 700;
+    font-family: var(--font-mono);
+    padding: 4px 0;
+}
+
+.agent-wallet-status.success {
+    color: #4CAF50;
+}
+
+.agent-wallet-status.error {
+    color: #ff0000;
+}
+
+.agent-wallet-status.loading {
+    color: #666666;
+}
