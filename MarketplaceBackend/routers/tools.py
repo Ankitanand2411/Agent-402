@@ -9,19 +9,19 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-import registry
 import database
+import registry
 from config import settings
 from models.tool import ToolCreate
-from tool_executor.executor import execute_code_tool, execute_proxy_tool, normalize_tool_code
+from services.escrow_service import refund_escrow, release_escrow
 from services.nitrolite_verifier import verify_nitrolite_proof
 from services.payment_verifier import verify_onchain_payment
-from services.escrow_service import release_escrow, refund_escrow
+from services.pricing import price_to_units
+from tool_executor.executor import execute_code_tool, execute_proxy_tool, normalize_tool_code
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -95,10 +95,12 @@ async def load_tools():
 # ---------------------------------------------------------------------------
 
 def _price_units(price_str: str) -> int:
-    try:
-        return int(float(price_str) * (10 ** TOKEN_DECIMALS))
-    except Exception:
-        return 10 ** TOKEN_DECIMALS  # default 1 token
+    """
+    Tool price → USDC atomic units, exactly (Decimal, not float).
+    Raises ValueError for a price that cannot be represented; callers turn
+    that into an explicit error instead of silently charging a default.
+    """
+    return price_to_units(price_str, TOKEN_DECIMALS)
 
 
 def _build_nitrolite_receipt(tool_name: str, provider_wallet: str, price_units: int, nitrolite: dict) -> dict:
@@ -242,7 +244,11 @@ async def call_tool(tool_name: str, request: Request):
     tool_config = registry.registered_proxies.get(tool_name, {})
     provider_wallet = tool_config.get("walletAddress") or settings.DEFAULT_EVM_WALLET or ""
     escrow_contract_addr = settings.ESCROW_CONTRACT_ADDRESS
-    price_units = _price_units(specific_route.get("price", "1"))
+    try:
+        price_units = _price_units(specific_route.get("price", "1"))
+    except ValueError as e:
+        logger.error(f"[Pricing] Tool '{tool_name}' has an invalid price: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "error": f"Tool '{tool_name}' has a misconfigured price"})
 
     # Parse payment headers
     x_payment = request.headers.get("x-payment")
@@ -293,15 +299,14 @@ async def call_tool(tool_name: str, request: Request):
             return JSONResponse(status_code=500, content={"error": "Escrow contract not configured"})
 
         tx_hash = x_payment_tx
-        payer_address = ""
-        paid_amount = 0
 
+        # The X-Payment header may also carry "from" and "amount", but those are
+        # client claims. Only the tx hash is taken from it; payer and amount are
+        # read from the on-chain receipt in verify_onchain_payment.
         if x_payment:
             try:
                 payload = json.loads(base64.b64decode(x_payment).decode("utf-8"))
                 tx_hash = tx_hash or payload.get("txHash")
-                payer_address = payload.get("from", "")
-                paid_amount = int(payload.get("amount", 0))
             except Exception as e:
                 logger.warning(f"[x402] Could not parse X-Payment header: {e}")
 

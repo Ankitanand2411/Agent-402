@@ -3,14 +3,14 @@
 Replaces the POST /gemini/chat handler in market.js.
 """
 import asyncio
-import re
 import logging
+import re
 from typing import Any
 
-from google import genai
-from google.genai import types as genai_types
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+from google import genai
+from google.genai import types as genai_types
 
 from config import settings
 from models.tool import GeminiChatRequest

@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Secrets / local config
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+dist/
+*.log
+
+# Runtime artefacts written by the backend (tool files are loaded from MongoDB)
+MarketplaceBackend/user_tools/*.runtime.mjs
+MarketplaceBackend/user_tools/tmp*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

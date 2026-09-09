@@ -3,9 +3,8 @@ Nitrolite off-chain payment verifier.
 Port of utils/nitroliteVerifier.js — uses eth-account for ECDSA sig recovery
 instead of ethers.recoverAddress.
 """
-import json
 import base64
-from typing import Any
+import json
 
 from eth_account import Account
 from web3 import Web3
@@ -23,7 +22,7 @@ def _parse_json_message(raw: str, field_name: str) -> dict:
     try:
         return json.loads(raw)
     except Exception as e:
-        raise ValueError(f"Invalid {field_name}: {e}")
+        raise ValueError(f"Invalid {field_name}: {e}") from e
 
 
 def _recover_request_signer(request_message: dict) -> str:
@@ -38,26 +37,36 @@ def _recover_request_signer(request_message: dict) -> str:
 
     sig = sig_list[0]
 
-    # Reproduce the exact JS serialisation: JSON.stringify with bigint→string replacer
-    payload_json = json.dumps(req, separators=(",", ":"))
-    payload_bytes = payload_json.encode("utf-8")
-    payload_hex = "0x" + payload_bytes.hex()
-    digest = Web3.keccak(hexstr=payload_hex)
+    digest = Web3.keccak(serialize_request_payload(req))
 
-    # eth_account recover from raw 32-byte hash (no EIP-191 prefix — same as ethers.recoverAddress)
-    from eth_account._utils.signing import sign_message_hash
-    from eth_account.messages import _hash_eip191_message
-    from eth_account._utils.legacy_transactions import serializable_unsigned_transaction_from_dict
-
-    # Use Account.recoverHash (raw keccak, no prefix — matches ethers.recoverAddress)
+    # Recover from the raw 32-byte keccak digest, with no EIP-191 prefix —
+    # this matches ethers.recoverAddress on the JS side.
     recovered = Account._recover_hash(digest, signature=sig)
     return Web3.to_checksum_address(recovered)
+
+
+def serialize_request_payload(req: list) -> bytes:
+    """
+    Byte-for-byte reproduction of the JS `JSON.stringify(req)` the client signed.
+
+    JSON.stringify emits compact JSON with no spaces and leaves non-ASCII
+    characters unescaped (UTF-8). Python's json.dumps must therefore use
+    compact separators AND ensure_ascii=False; with the default
+    ensure_ascii=True a payload containing "é" would serialise to "\\u00e9",
+    hash differently, and every signature over it would fail to recover.
+    """
+    return json.dumps(req, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
 def _assert_rpc_method(message: dict, expected_method: str, field_name: str):
     req = message.get("req", [])
     res = message.get("res", [])
     actual_method = req[1] if len(req) > 1 else (res[1] if len(res) > 1 else None)
+    if res and actual_method == "error":
+        # An RPC error response is handled by _get_response_params, which
+        # raises with the ClearNode's own error text — more useful than
+        # reporting a method mismatch here.
+        return
     if actual_method != expected_method:
         raise ValueError(
             f"Expected {field_name} method {expected_method}, got {actual_method or 'unknown'}"
@@ -103,7 +112,7 @@ def verify_nitrolite_proof(
     try:
         proof = json.loads(base64.b64decode(encoded_proof).decode("utf-8"))
     except Exception as e:
-        raise ValueError(f"Invalid X-Nitrolite-Proof header: {e}")
+        raise ValueError(f"Invalid X-Nitrolite-Proof header: {e}") from e
 
     submit_request = _parse_json_message(proof.get("submitStateRequest", ""), "submitStateRequest")
     submit_response = _parse_json_message(proof.get("submitStateResponse", ""), "submitStateResponse")

@@ -3,6 +3,7 @@
 Replaces the equivalent GET routes in market.js.
 """
 from fastapi import APIRouter
+
 from config import settings
 
 router = APIRouter()

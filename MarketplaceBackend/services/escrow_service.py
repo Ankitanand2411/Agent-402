@@ -4,10 +4,11 @@ Replaces the NonceQueue class in market.js — guarantees no nonce collisions.
 """
 import asyncio
 import logging
-from typing import Callable, Awaitable, Any
+from typing import Any, Awaitable, Callable
 
-from web3 import Web3
 from eth_account import Account
+from web3 import Web3
+
 from config import settings
 
 logger = logging.getLogger(__name__)

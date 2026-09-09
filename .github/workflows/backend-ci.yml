@@ -1,0 +1,40 @@
+name: backend-ci
+
+# Lint + tests for the FastAPI marketplace backend on every push/PR touching it.
+# No secrets needed: MongoDB, the Sepolia RPC, Gemini and escrow settlement are
+# all replaced with in-process fakes in MarketplaceBackend/tests.
+on:
+  push:
+    paths:
+      - "MarketplaceBackend/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    paths:
+      - "MarketplaceBackend/**"
+      - ".github/workflows/backend-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: MarketplaceBackend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            MarketplaceBackend/requirements.txt
+            MarketplaceBackend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Test (pytest)
+        run: pytest -q

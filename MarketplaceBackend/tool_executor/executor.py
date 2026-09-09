@@ -5,10 +5,10 @@ Tool executor — runs registered tools in two modes:
 """
 import asyncio
 import json
+import logging
 import os
 import re
 import tempfile
-import logging
 from pathlib import Path
 
 import httpx
@@ -163,9 +163,9 @@ async def execute_code_tool(tool_name: str, body: dict, trusted: bool = False) -
             env={**os.environ},  # pass full env so tools can read GROQ_API_KEY etc.
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)
-    except asyncio.TimeoutError:
+    except asyncio.TimeoutError as e:
         proc.kill()
-        raise RuntimeError(f"Tool {tool_name} timed out after 30s")
+        raise RuntimeError(f"Tool {tool_name} timed out after 30s") from e
     finally:
         try:
             os.unlink(runner_path)
