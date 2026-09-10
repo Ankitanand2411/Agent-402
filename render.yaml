@@ -24,3 +24,5 @@ services:
         value: "0"
       - key: REQUIRE_PROVIDER_SIGNATURE
         value: "false"
+      - key: TOOL_RETRIEVAL_TOP_K
+        value: "8"
