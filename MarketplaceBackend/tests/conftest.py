@@ -69,13 +69,21 @@ def fake_collection(monkeypatch):
 def clean_registry():
     import registry
 
-    registry.dynamic_routes.clear()
-    registry.registered_proxies.clear()
-    registry.marketplace_tools.clear()
+    registry.clear()
     yield registry
-    registry.dynamic_routes.clear()
-    registry.registered_proxies.clear()
-    registry.marketplace_tools.clear()
+    registry.clear()
+
+
+ECHO_TOOL_DOC = {
+    "name": "echo",
+    "description": "Echoes its input COSTS: 0.5 USDC",
+    "price": "0.5",
+    "type": "proxy",
+    "targetUrl": "http://tool.local/echo",
+    "walletAddress": PROVIDER_ADDR,
+    "parameters": {"type": "object", "properties": {"text": {"type": "string", "description": "What to echo"}}, "required": ["text"]},
+    "status": "approved",
+}
 
 
 def _apply_update(doc: dict, update: dict) -> None:

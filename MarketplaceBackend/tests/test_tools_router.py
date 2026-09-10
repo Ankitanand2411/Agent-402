@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 
 from config import settings
 from routers import tools as tools_router
-from tests.conftest import ESCROW_ADDR, PAYER_ADDR, PROVIDER_ADDR
+from tests.conftest import ECHO_TOOL_DOC, ESCROW_ADDR, PAYER_ADDR, PROVIDER_ADDR
 
 TX = "0x" + "cd" * 32
 
@@ -43,20 +43,7 @@ def client(monkeypatch, clean_registry, fake_collection, fake_ledger, fake_spend
 @pytest.fixture
 def echo_tool(clean_registry):
     """A registered proxy tool priced at 0.5 USDC."""
-    clean_registry.dynamic_routes["/tools/echo"] = {
-        "price": "0.5",
-        "asset": "native",
-        "description": "Echo. COSTS: 0.5 USDC",
-        "mimeType": "application/json",
-        "maxTimeoutSeconds": 300,
-        "walletAddress": PROVIDER_ADDR,
-    }
-    clean_registry.registered_proxies["echo"] = {
-        "type": "proxy",
-        "targetUrl": "http://tool.local/echo",
-        "method": "POST",
-        "walletAddress": PROVIDER_ADDR,
-    }
+    clean_registry.register(ECHO_TOOL_DOC)
     return clean_registry
 
 
@@ -102,13 +89,13 @@ def test_unpaid_call_returns_402_challenge(client, echo_tool):
 
 
 def test_challenge_uses_exact_pricing(client, echo_tool):
-    echo_tool.dynamic_routes["/tools/echo"]["price"] = "0.0157"
+    echo_tool.get("echo")["price"] = "0.0157"
     r = client.post("/tools/echo", json={})
     assert r.json()["accepts"][0]["maxAmountRequired"] == "15700"  # float math would give 15699
 
 
 def test_misconfigured_price_is_a_500_not_a_default_charge(client, echo_tool):
-    echo_tool.dynamic_routes["/tools/echo"]["price"] = "free"
+    echo_tool.get("echo")["price"] = "free"
     r = client.post("/tools/echo", json={})
     assert r.status_code == 500
     assert "misconfigured price" in r.json()["error"]
@@ -280,9 +267,10 @@ def test_approve_hot_loads_tool_into_registry(client, fake_collection, clean_reg
 
     assert r.status_code == 200
     assert fake_collection.updates == [({"name": "weather"}, {"$set": {"status": "approved"}})]
-    assert clean_registry.dynamic_routes["/tools/weather"]["price"] == "0.25"
-    assert clean_registry.registered_proxies["weather"]["targetUrl"] == "http://w.local/run"
-    assert [t["name"] for t in clean_registry.marketplace_tools] == ["weather"]
+    weather = clean_registry.get("weather")
+    assert weather["price"] == "0.25" and weather["targetUrl"] == "http://w.local/run"
+    assert [t["name"] for t in clean_registry.marketplace_view()] == ["weather"]
+    assert clean_registry.marketplace_view()[0]["description"] == "Weather lookup"     # COSTS suffix stripped
 
     # And it is immediately callable: unpaid call gets a 402 for 0.25 USDC.
     r = client.post("/tools/weather", json={})
@@ -317,7 +305,7 @@ def test_approve_without_admin_key_is_401_and_changes_nothing(client, fake_colle
     assert client.post("/tools/w/approve").status_code == 401
     assert client.post("/tools/w/approve", headers={"Authorization": "Bearer wrong"}).status_code == 401
     assert fake_collection.updates == []
-    assert clean_registry.dynamic_routes == {}
+    assert clean_registry.tools == {}
 
 
 def test_approve_fails_closed_when_admin_key_unconfigured(client, fake_collection, monkeypatch):
@@ -386,8 +374,7 @@ def test_same_tx_hash_cannot_buy_two_executions(client, echo_tool, collaborators
 
 
 def test_replay_is_checked_before_execution_even_on_other_tool(client, echo_tool, collaborators, clean_registry):
-    clean_registry.dynamic_routes["/tools/other"] = dict(clean_registry.dynamic_routes["/tools/echo"])
-    clean_registry.registered_proxies["other"] = dict(clean_registry.registered_proxies["echo"])
+    clean_registry.register({**ECHO_TOOL_DOC, "name": "other"})
     assert client.post("/tools/echo", json={}, headers={"X-Payment-Tx": TX}).status_code == 200
     assert client.post("/tools/other", json={}, headers={"X-Payment-Tx": TX}).status_code == 409
     assert len(collaborators["execute"].calls) == 1

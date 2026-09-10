@@ -1,6 +1,5 @@
 """
 x402 on-chain payment verifier using web3.py.
-Replaces the ethers.js payment verification block in market.js.
 
 Verification rules for a payment transaction:
   1. the receipt exists and the transaction succeeded (status == 1)
@@ -17,7 +16,6 @@ from config import settings
 
 # keccak256("Transfer(address,address,uint256)") — the topic[0] of every ERC-20 Transfer log.
 TRANSFER_TOPIC = HexBytes(Web3.keccak(text="Transfer(address,address,uint256)"))
-TRANSFER_EVENT_SIG = TRANSFER_TOPIC.hex()  # kept for backwards compatibility with callers/tests
 
 # Receipt polling. A transaction can take a few seconds to be mined after the
 # client sends its hash, so we poll instead of failing on the first miss.

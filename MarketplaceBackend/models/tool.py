@@ -35,12 +35,3 @@ class GeminiChatRequest(BaseModel):
     history: Optional[list] = []
     message: Any = None
     tools: Optional[list] = []
-
-
-class ToolApproveRequest(BaseModel):
-    pass  # no body needed
-
-
-class ToolCallRequest(BaseModel):
-    class Config:
-        extra = "allow"

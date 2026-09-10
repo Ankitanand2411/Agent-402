@@ -24,7 +24,7 @@ from mcp.client.streamable_http import streamablehttp_client
 import mcp_server
 from config import settings
 from routers import tools as tools_router
-from tests.conftest import ESCROW_ADDR, PAYER_ADDR, PROVIDER_ADDR
+from tests.conftest import ECHO_TOOL_DOC, ESCROW_ADDR, PAYER_ADDR, PROVIDER_ADDR
 from tests.test_tools_router import Recorder
 
 TX = "0x" + "ee" * 32
@@ -38,12 +38,7 @@ def marketplace(monkeypatch, clean_registry, fake_collection, fake_ledger, fake_
     monkeypatch.setattr(settings, "SETTLEMENT_MODE", "sync")
     monkeypatch.setattr(settings, "DAILY_SPEND_CAP_UNITS", 0)
 
-    clean_registry.dynamic_routes["/tools/echo"] = {"price": "0.5", "walletAddress": PROVIDER_ADDR, "description": "Echo COSTS: 0.5 USDC"}
-    clean_registry.registered_proxies["echo"] = {"type": "proxy", "targetUrl": "http://tool.local/echo", "walletAddress": PROVIDER_ADDR}
-    clean_registry.marketplace_tools.append({
-        "name": "echo", "description": "Echoes its input", "price": "0.5",
-        "parameters": {"type": "object", "properties": {"text": {"type": "string", "description": "What to echo"}}, "required": ["text"]},
-    })
+    clean_registry.register(ECHO_TOOL_DOC)
 
     verify = Recorder(result={"from_addr": PAYER_ADDR, "to_addr": ESCROW_ADDR, "transfer_amount": 500_000})
     execute = Recorder(result={"success": True, "result": "Tool call successful", "data": {"echo": "hi"}})

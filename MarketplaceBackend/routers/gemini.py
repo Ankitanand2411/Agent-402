@@ -1,6 +1,6 @@
 """
 /gemini/chat endpoint — uses the new google-genai SDK (google.genai).
-Replaces the POST /gemini/chat handler in market.js.
+
 """
 import asyncio
 import logging
@@ -39,7 +39,7 @@ TOOL_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 
 
 def _sanitize_parameters(params: Any) -> dict:
-    """Mirrors sanitizeGeminiParameters() from market.js."""
+    """Coerce a provider-submitted parameter schema into the subset Gemini accepts."""
     if not params or not isinstance(params, dict):
         return {"type": "object", "properties": {}}
 
@@ -67,7 +67,7 @@ def _sanitize_parameters(params: Any) -> dict:
 
 
 def _sanitize_tools(tools: list) -> list:
-    """Mirrors sanitizeGeminiTools() from market.js."""
+    """Drop malformed tools; normalise names and descriptions."""
     if not isinstance(tools, list):
         return []
     sanitized = []

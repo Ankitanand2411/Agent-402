@@ -201,6 +201,8 @@ ESCROW_CONTRACT_ADDRESS=0x14b848bE61C159908C0F1127C53Aa70dD0F2cBed
 ESCROW_PRIVATE_KEY=your_escrow_admin_private_key
 
 # Security / operations (see "Hardening" below)
+MONGODB_DB_NAME=test                    # the Atlas URI has no database path; "test" is where the existing data lives
+ALLOWED_ORIGINS=http://localhost:5173   # comma-separated browser origins (defaults include the historical Vercel deployments; prune)
 ADMIN_API_KEY=long-random-string        # required for POST /tools/{name}/approve; endpoint returns 503 if unset
 REQUIRE_PROVIDER_SIGNATURE=false        # true = /tools/register needs an EIP-191 signature from the payout wallet
 SETTLEMENT_MODE=async                   # async = respond first, settle escrow in background; sync = original behaviour
@@ -401,4 +403,6 @@ The chat response now includes `toolsDeclared`, `toolsAvailable` and `usage` (pr
 ## Known limitations (next up)
 
 - An approved `code` tool runs on the server with the full environment (the "sandbox" is a CJS shim, not isolation). Fix: run untrusted tools in a separate container or a WASM/isolate runtime with no env access.
-- Registry cache, in-memory escrow queue and settlement tasks assume a single instance. Fix: move the queue to a durable job store and reconcile `settlement.status == "pending"` receipts on startup.
+- Registry (one in-memory dict, `registry.py`), in-memory escrow queue and settlement tasks assume a single instance. Fix: TTL reload or change stream for the registry, a durable job store for the queue, and reconcile `settlement.status == "pending"` receipts on startup.
+- Tool code is stored as-is and executed as-is. If the `get_audio` tool still carries the deprecated model/voice names, run `scripts/patch_stored_tool_code.py` once (dry run first); the executor no longer rewrites it at load time.
+- The receipt is returned both in the body and in the `X-Payment-Receipt` header because the frontend's failure path reads the header; drop the header once the frontend reads the body only.

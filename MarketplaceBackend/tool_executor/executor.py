@@ -1,13 +1,12 @@
 """
 Tool executor — runs registered tools in two modes:
-  1. proxy  → HTTP POST to a remote URL (replaces node-fetch)
-  2. code   → executes JS files via Node.js subprocess (keeps existing user_tools/*.js)
+  1. proxy  → HTTP POST to a remote URL
+  2. code   → executes JS files via a Node.js subprocess
 """
 import asyncio
 import json
 import logging
 import os
-import re
 import tempfile
 from pathlib import Path
 
@@ -19,41 +18,14 @@ USER_TOOLS_DIR = Path(__file__).parent.parent / "user_tools"
 
 
 # ---------------------------------------------------------------------------
-# Code-tool normalisation (port of normalizeToolCode from market.js)
+# Code-tool normalisation
 # ---------------------------------------------------------------------------
 
-def normalize_tool_code(tool_name: str, raw_code: str) -> str:
-    """Apply the same code normalisation patches as the JS normalizeToolCode()."""
+def normalize_tool_code(raw_code: str) -> str:
+    """Normalise line endings. Tool-specific rewrites belong in the stored code, not here."""
     if not isinstance(raw_code, str):
         return raw_code
-
-    code = raw_code.replace("\r\n", "\n")
-
-    if tool_name == "get_audio":
-        if not re.search(r"if\s*\(\s*!apiKey\s*\)\s*\{", code) and "GROQ_API_KEY not configured" in code:
-            code = re.sub(
-                r"(\s*const apiKey = process\.env\.GROQ_API_KEY;\s*)\n\s*throw new Error\(",
-                r"\1\n  if (!apiKey) {\n    throw new Error(",
-                code,
-            )
-
-        code = re.sub(r"^\s*\}\s*$", "  }", code, flags=re.MULTILINE)
-        code = re.sub(
-            r"export\s+default\s+async\s+function\s*\(\s*\{\s*text\s*,\s*voice\s*\}\s*\)\s*\{",
-            "export default async function({ text, voice = 'hannah' }) {",
-            code,
-        )
-        code = re.sub(r"(['\"])playai-tts\1", "'canopylabs/orpheus-v1-english'", code)
-        code = re.sub(r"(['\"])Fritz-PlayAI\1", "'hannah'", code)
-
-        if not re.search(r"if\s*\(\s*!text\??\s*\)\s*\{", code):
-            code = re.sub(
-                r"(const apiKey = process\.env\.GROQ_API_KEY;\s*\n(?:\s*if\s*\(\s*!apiKey\s*\)\s*\{[\s\S]*?\}\s*\n)?)",
-                lambda m: m.group(0) + "\n  if (!text || !String(text).trim()) {\n    throw new Error('Text is required to generate audio');\n  }\n",
-                code,
-            )
-
-    return code
+    return raw_code.replace("\r\n", "\n")
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +33,7 @@ def normalize_tool_code(tool_name: str, raw_code: str) -> str:
 # ---------------------------------------------------------------------------
 
 async def execute_proxy_tool(target_url: str, body: dict) -> dict:
-    """Forward request to a remote tool URL — replaces node-fetch proxy logic."""
+    """Forward the request body to the tool provider's URL."""
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.post(
             target_url,
@@ -124,7 +96,7 @@ async def execute_code_tool(tool_name: str, body: dict, trusted: bool = False) -
         raise FileNotFoundError(f"Tool file not found at {code_path}")
 
     source_code = code_path.read_text("utf-8")
-    normalized_code = normalize_tool_code(tool_name, source_code)
+    normalized_code = normalize_tool_code(source_code)
 
     # Write normalised code back so the subprocess picks it up
     runtime_path = USER_TOOLS_DIR / f"{tool_name}.runtime.mjs"
@@ -140,7 +112,7 @@ async def execute_code_tool(tool_name: str, body: dict, trusted: bool = False) -
         )
         runner_ext = ".mjs"
     else:
-        # Sandboxed CJS shim — replaces vm.runInContext
+        # CJS shim (not real isolation; see README known limitations)
         sandboxed_code = normalized_code.replace("export default ", "exports.default = ")
         runner_content = _JS_SANDBOX_TEMPLATE.format(
             tool_code=sandboxed_code,
