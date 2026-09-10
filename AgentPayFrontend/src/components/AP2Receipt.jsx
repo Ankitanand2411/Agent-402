@@ -31,7 +31,7 @@ const useLiveSettlement = (initial) => {
                         return;
                     }
                 }
-            } catch (e) { /* transient; keep polling */ }
+            } catch { /* transient; keep polling */ }
             if (!cancelled && attempts < SETTLEMENT_POLL_MAX) timer = setTimeout(tick, SETTLEMENT_POLL_MS);
         };
         let timer = setTimeout(tick, SETTLEMENT_POLL_MS);

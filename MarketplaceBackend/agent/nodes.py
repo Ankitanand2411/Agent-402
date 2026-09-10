@@ -59,7 +59,7 @@ async def plan(state: AgentRunState) -> dict[str, Any]:
             "args": fc["args"],
             "known": tool is not None,
             "price_units": price_units,
-            "challenge": payment_challenge(fc["name"], price_units) if price_units > 0 else None,
+            "challenge": payment_challenge(fc["name"], price_units, (tool or {}).get("walletAddress")) if price_units > 0 else None,
         })
 
     budget = state.get("max_spend_units") or 0

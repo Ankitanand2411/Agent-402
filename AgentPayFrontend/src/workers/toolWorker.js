@@ -194,7 +194,7 @@ self.onmessage = async (event) => {
 
             const serverReceiptHeader = deliveryResp.headers.get('X-Payment-Receipt');
             if (serverReceiptHeader) {
-                try { receipt.serverAttestation = JSON.parse(serverReceiptHeader); } catch (e) { }
+                try { receipt.serverAttestation = JSON.parse(serverReceiptHeader); } catch { /* header not JSON */ }
             }
             if (deliveryData && deliveryData.escrowReceipt) {
                 receipt.escrowReceipt = deliveryData.escrowReceipt;

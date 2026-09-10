@@ -13,6 +13,7 @@ import {
   processQueryWithGemini,
   wakeUpServices
 } from '../services/geminiService';
+import { processQueryWithServerAgent } from '../services/serverAgent';
 import envConfig from '../config/env';
 import './AgentInterface.css';
 import ChatSidebar from '../components/ChatSidebar';
@@ -27,12 +28,10 @@ const AgentInterface = () => {
   const [availableTools, setAvailableTools] = useState([]);
   const [isInitialized, setIsInitialized] = useState(false);
   const [expandedResponses, setExpandedResponses] = useState(new Set());
-  const [audioBlobs, setAudioBlobs] = useState({});
+  const [audioBlobs] = useState({}); // populated by a future TTS feature; the old generator was dead code
   const [processingStatus, setProcessingStatus] = useState(null);
   const [notifications, setNotifications] = useState([]);
-  const [agentPublicKey, setAgentPublicKey] = useState(null);
   const messagesEndRef = useRef(null);
-  const messageIdRef = useRef(1);
 
   const inputRef = useRef(null);
 
@@ -213,53 +212,6 @@ const AgentInterface = () => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  const generateAudio = async (text, messageId) => {
-    try {
-      const backendUrl = envConfig.MARKETPLACE_URL || 'http://localhost:3000/';
-
-      const endpoint = `${backendUrl.replace(/\/tools\/?$/, '')}/tools/get_audio`;
-      console.log('Audio endpoint:', endpoint, 'for message:', messageId);
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text })
-      });
-
-      console.log('Audio response status:', response.status);
-
-      if (!response.ok) {
-        throw new Error(`Failed to generate audio: ${response.status} - Check backend URL: ${endpoint}`);
-      }
-
-      const responseData = await response.json();
-      let audioUrl;
-
-      if (responseData.type === 'audio' && responseData.encoding === 'base64') {
-        const binaryString = atob(responseData.data);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], { type: 'audio/wav' });
-        audioUrl = URL.createObjectURL(blob);
-      } else {
-        throw new Error('Invalid audio response format. Expected x402 JSON with base64.');
-      }
-
-      console.log('Audio URL created:', audioUrl);
-
-      setAudioBlobs(prev => ({
-        ...prev,
-        [messageId]: audioUrl
-      }));
-    } catch (error) {
-      console.error('Error generating audio:', error);
-      addMessage('system', `Error generating audio: ${error.message}`);
-    }
-  };
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isProcessing) return;
@@ -282,10 +234,7 @@ const AgentInterface = () => {
       }));
 
     try {
-      const result = await processQueryWithGemini(
-        userQuery,
-        availableTools,
-        (progress) => {
+      const onProgress = (progress) => {
           switch (progress.step) {
             case 'analyzing':
             case 'generating_response':
@@ -359,15 +308,16 @@ const AgentInterface = () => {
               });
               break;
           }
-        },
-        chatHistory
-      );
+      };
+
+      const result = envConfig.AGENT_MODE === 'client'
+        ? await processQueryWithGemini(userQuery, availableTools, onProgress, chatHistory)
+        : await processQueryWithServerAgent(userQuery, onProgress, chatHistory);
 
       await new Promise(resolve => setTimeout(resolve, 500));
 
       const finalStatusArgs = processingStatus?.args;
       const finalStatusAmount = processingStatus?.amount;
-      const finalStatusTp = processingStatus?.type;
       const finalStatusTxHash = processingStatus?.txHash;
 
       setProcessingStatus(null);

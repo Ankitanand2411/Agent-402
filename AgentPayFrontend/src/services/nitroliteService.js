@@ -470,14 +470,14 @@ export const initNitrolite = async (privateKey, address, options = {}) => {
                 try {
                     const pingMsg = createPingMessageV2();
                     wsConnection.send(pingMsg);
-                } catch { }
+                } catch { /* socket already closed */ }
             } else {
                 clearInterval(pingInterval);
             }
         }, 30000);
 
         // Refresh balance every 15s
-        const balanceInterval = setInterval(() => {
+        setInterval(() => {
             refreshBalance().catch(console.warn);
         }, 15000);
 

@@ -15,7 +15,7 @@ const Marketplace = () => {
     const [agents, setAgents] = useState([]);
     const [categories, setCategories] = useState(['All']);
     const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [, setError] = useState(null); // kept for a future error banner; not rendered yet
 
     // Fetch tools from backend on component mount
     useEffect(() => {

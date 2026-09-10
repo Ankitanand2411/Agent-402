@@ -6,7 +6,7 @@ import './WorkerPanel.css';
 const WorkerPanel = () => {
     const [workers, setWorkers] = useState([]);
     const [channels, setChannels] = useState([]);
-    const [now, setNow] = useState(Date.now());
+    const [now, setNow] = useState(() => Date.now());
     const timerRef = useRef(null);
 
     useEffect(() => {

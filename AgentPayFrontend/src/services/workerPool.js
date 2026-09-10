@@ -21,7 +21,8 @@ export const subscribeWorkers = (fn) => {
 };
 
 export const executeToolInWorker = (toolName, params, onProgress) => {
-    return new Promise(async (resolve, reject) => {
+    return new Promise((resolve) => {
+      (async () => {
         let channel = null;
         let worker = null;
         const callId = `${toolName}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -107,5 +108,6 @@ export const executeToolInWorker = (toolName, params, onProgress) => {
             cleanup();
             resolve({ type: 'result', success: false, error: e.message, toolName });
         }
+      })();
     });
 };

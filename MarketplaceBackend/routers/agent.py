@@ -32,6 +32,19 @@ class StartRunRequest(BaseModel):
     task: str = Field(..., min_length=1, max_length=4000)
     max_iterations: int | None = Field(None, ge=1, le=20)
     max_spend_units: int | None = Field(None, ge=0)
+    # Prior conversation as JS-style turns ({role: user|model, parts: [{text}]}); text parts only.
+    history: list[dict[str, Any]] | None = Field(None, max_length=40)
+
+
+def _clean_history(history: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    out = []
+    for turn in history or []:
+        role = "model" if turn.get("role") in ("model", "assistant") else "user"
+        parts = [{"text": str(p.get("text") if isinstance(p, dict) else p)[:4000]}
+                 for p in turn.get("parts", []) if (isinstance(p, dict) and p.get("text")) or isinstance(p, str)]
+        if parts:
+            out.append({"role": role, "parts": parts})
+    return out
 
 
 class PayRequest(BaseModel):
@@ -107,7 +120,7 @@ async def start_run(request: Request, body: StartRunRequest):
         "task": body.task,
         "max_iterations": body.max_iterations or settings.AGENT_MAX_ITERATIONS,
         "max_spend_units": body.max_spend_units if body.max_spend_units is not None else settings.AGENT_DEFAULT_MAX_SPEND_UNITS,
-        "history": [{"role": "user", "parts": [{"text": body.task}]}],
+        "history": _clean_history(body.history) + [{"role": "user", "parts": [{"text": body.task}]}],
         "iteration": 0,
         "status": STATUS_PLANNING,
         "spend_units": 0,

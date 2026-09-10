@@ -1,17 +1,10 @@
 name: backend-ci
 
-# Lint + tests for the FastAPI marketplace backend on every push/PR touching it.
+# Lint + tests for the FastAPI marketplace backend on every push/PR (no path
+# filter, so it can be a required status check).
 # No secrets needed: MongoDB, the Sepolia RPC, Gemini and escrow settlement are
 # all replaced with in-process fakes in MarketplaceBackend/tests.
-on:
-  push:
-    paths:
-      - "MarketplaceBackend/**"
-      - ".github/workflows/backend-ci.yml"
-  pull_request:
-    paths:
-      - "MarketplaceBackend/**"
-      - ".github/workflows/backend-ci.yml"
+on: [push, pull_request]
 
 jobs:
   test:
