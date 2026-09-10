@@ -26,7 +26,7 @@ ADMIN = {"Authorization": "Bearer test-admin-key"}
 
 
 @pytest.fixture
-def client(monkeypatch, clean_registry, fake_collection, fake_ledger, fake_spend):
+def client(monkeypatch, clean_registry, fake_collection, fake_ledger, fake_spend, permissive_urls):
     monkeypatch.setattr(settings, "ESCROW_CONTRACT_ADDRESS", ESCROW_ADDR)
     monkeypatch.setattr(settings, "ESCROW_PRIVATE_KEY", "0x" + "33" * 32)
     monkeypatch.setattr(settings, "ADMIN_API_KEY", "test-admin-key")
@@ -220,7 +220,7 @@ def test_valid_nitrolite_proof_executes_without_escrow(client, echo_tool, collab
 def test_register_creates_pending_tool(client, fake_collection):
     r = client.post("/tools/register", json={
         "name": "weather", "description": "Weather lookup", "price": "0.25",
-        "type": "proxy", "targetUrl": "http://w.local/run", "walletAddress": PROVIDER_ADDR,
+        "type": "proxy", "targetUrl": "http://w.example/run", "walletAddress": PROVIDER_ADDR,
     })
     assert r.status_code == 200
     assert r.json()["success"] is True
@@ -260,7 +260,7 @@ def test_register_validates_type_specific_fields(client, body):
 def test_approve_hot_loads_tool_into_registry(client, fake_collection, clean_registry):
     fake_collection.docs.append({
         "name": "weather", "description": "Weather lookup COSTS: 0.25 USDC", "price": "0.25",
-        "type": "proxy", "targetUrl": "http://w.local/run", "walletAddress": PROVIDER_ADDR, "status": "pending",
+        "type": "proxy", "targetUrl": "http://w.example/run", "walletAddress": PROVIDER_ADDR, "status": "pending",
     })
 
     r = client.post("/tools/weather/approve", headers=ADMIN)
@@ -268,7 +268,7 @@ def test_approve_hot_loads_tool_into_registry(client, fake_collection, clean_reg
     assert r.status_code == 200
     assert fake_collection.updates == [({"name": "weather"}, {"$set": {"status": "approved"}})]
     weather = clean_registry.get("weather")
-    assert weather["price"] == "0.25" and weather["targetUrl"] == "http://w.local/run"
+    assert weather["price"] == "0.25" and weather["targetUrl"] == "http://w.example/run"
     assert [t["name"] for t in clean_registry.marketplace_view()] == ["weather"]
     assert clean_registry.marketplace_view()[0]["description"] == "Weather lookup"     # COSTS suffix stripped
 

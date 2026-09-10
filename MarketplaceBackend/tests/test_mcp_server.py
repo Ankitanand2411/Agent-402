@@ -31,7 +31,7 @@ TX = "0x" + "ee" * 32
 
 
 @pytest.fixture
-def marketplace(monkeypatch, clean_registry, fake_collection, fake_ledger, fake_spend):
+def marketplace(monkeypatch, clean_registry, fake_collection, fake_ledger, fake_spend, permissive_urls):
     """The real tools router with fakes for chain, execution and settlement, reachable in-process."""
     monkeypatch.setattr(settings, "ESCROW_CONTRACT_ADDRESS", ESCROW_ADDR)
     monkeypatch.setattr(settings, "ESCROW_PRIVATE_KEY", "0x" + "33" * 32)

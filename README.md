@@ -208,6 +208,10 @@ REQUIRE_PROVIDER_SIGNATURE=false        # true = /tools/register needs an EIP-19
 SETTLEMENT_MODE=async                   # async = respond first, settle escrow in background; sync = original behaviour
 DAILY_SPEND_CAP_UNITS=0                 # per-wallet daily cap in USDC atomic units (0 = off); over-cap payments are refunded
 TOOL_RETRIEVAL_TOP_K=8                  # declare only the k most relevant tools per turn (0 = declare the whole catalog)
+TOOL_ENV_ALLOWLIST=GROQ_API_KEY,ADZUNA_APP_ID,ADZUNA_APP_KEY   # the only env vars a code tool may read
+TOOL_TIMEOUT_SECONDS=30
+TOOL_MAX_MEMORY_MB=512
+ALLOW_INSECURE_TOOL_URLS=false          # true only for local dev: lets proxy tools use http://
 TOOL_EMBED_MODEL=gemini-embedding-001   # embedding model for tool descriptions and requests
 TOOL_EMBED_DIMENSIONS=768
 GROQ_API_KEY=your_groq_api_key
@@ -374,6 +378,7 @@ No credentials or network are needed: MongoDB, the Sepolia RPC, Gemini and escro
 | `services/tool_retrieval` | Top-k by similarity with a bag-of-words fake embedder, must-include for tools already used, fail-open on disabled/small catalog/embedding failure/no key/blank query, embed-once caching, re-embed only changed descriptions, persistence and reload across index instances, foreign-model vectors ignored, query-text extraction rules |
 | `/gemini/chat` | Fake SDK client: retrieval narrows declarations, tool-result turns keep the tool in use, retrieval disabled declares all, usage reported and recorded |
 | `mcp_server` | Tool list from the registry with prices and the payment schema, payment→header mapping for both rails, forwarding to the real payment gate (402 challenge without payment, result + receipt with payment, tool failure and unreachable marketplace as error results), and a real MCP client round trip in-process: initialize, list, challenge, pay, receipt, replay refused |
+| `services/url_policy` + isolation | Every non-public address class rejected (loopback, RFC1918, metadata, multicast, reserved, IPv6 ULA/link-local/mapped), split-horizon hosts, local-style names before DNS, literal IPs, scheme/credentials/empty host, http only in dev; enforcement at register, approve and call time; redirects off; response cap; environment allowlist withholds server secrets; rlimits set; **real Node runs**: both shim paths execute with secrets withheld, a memory hog is killed, a slow tool times out |
 | `services/telemetry` | Percentiles, Gemini turn aggregates (tokens, declaration ratio, errors), route aggregates, settlement statistics from ledger timestamps (delivery vs settlement medians, per rail/status), ledger timestamps written on delivery/settlement, admin-only `/metrics`, ledger failure does not break the endpoint |
 
 CI runs the same two commands on every push/PR touching `MarketplaceBackend/` (`.github/workflows/backend-ci.yml`).
@@ -388,6 +393,8 @@ CI runs the same two commands on every push/PR touching `MarketplaceBackend/` (`
 | Settlement latency (~12 s on-chain wait inside the request) | `SETTLEMENT_MODE=async`: the response returns with `escrowRelease: {status: "pending", receiptId, poll}`; a tracked background task performs the release/refund and updates the ledger; shutdown drains in-flight tasks | `GET /receipts/{paymentKey}` |
 | Runaway agent / leaked worker key | `DAILY_SPEND_CAP_UNITS`: atomic `find_one_and_update` reservation per (wallet, UTC day); over-cap payments are refunded, never executed; refunds return budget | `429` with refund receipt |
 | Untrusted header data | Only the tx hash is read from `X-Payment`; payer and amount come from the on-chain receipt | — |
+| Server-side request forgery via proxy tools | `targetUrl` must be public `https`; local-style hostnames and every non-public address class (loopback, RFC1918, link-local/metadata, multicast, reserved, IPv6 unique-local, IPv4-mapped) are rejected. Checked at registration, at approval, and again immediately before each call (DNS rebinding). Redirects are never followed; responses are capped at `PROXY_MAX_RESPONSE_BYTES` | `400 targetUrl rejected` |
+| Code tools reading server secrets / exhausting the host | Subprocess gets a minimal environment plus `TOOL_ENV_ALLOWLIST` only (never `ESCROW_PRIVATE_KEY`, `MONGODB_URI`, `GEMINI_API_KEY`, `ADMIN_API_KEY`); `RLIMIT_DATA`/`RLIMIT_CPU`/`RLIMIT_NPROC` plus V8 `--max-old-space-size`; wall-clock timeout | tool error, refund |
 
 ## Tool retrieval
 
@@ -402,7 +409,7 @@ The chat response now includes `toolsDeclared`, `toolsAvailable` and `usage` (pr
 
 ## Known limitations (next up)
 
-- An approved `code` tool runs on the server with the full environment (the "sandbox" is a CJS shim, not isolation). Fix: run untrusted tools in a separate container or a WASM/isolate runtime with no env access.
+- An approved `code` tool still runs on the same host as the server. The environment allowlist and rlimits bound what it can read and consume, but a CJS shim is not isolation: it can still open network connections and read the tools directory. Real fix: a separate container or an isolate runtime (`isolated-vm`, Deno with explicit permissions) behind an internal API.
 - Registry (one in-memory dict, `registry.py`), in-memory escrow queue and settlement tasks assume a single instance. Fix: TTL reload or change stream for the registry, a durable job store for the queue, and reconcile `settlement.status == "pending"` receipts on startup.
 - Tool code is stored as-is and executed as-is. If the `get_audio` tool still carries the deprecated model/voice names, run `scripts/patch_stored_tool_code.py` once (dry run first); the executor no longer rewrites it at load time.
 - The receipt is returned both in the body and in the `X-Payment-Receipt` header because the frontend's failure path reads the header; drop the header once the frontend reads the body only.
