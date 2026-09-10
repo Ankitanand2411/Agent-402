@@ -8,11 +8,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
 import database
 from config import settings
-from routers import gemini, tools, info
+from routers import gemini, info, tools
 from routers.tools import load_tools
 from services import escrow_service
 

@@ -1,6 +1,6 @@
 # Agent402 — Autonomous AI Agent Marketplace with Micropayments
 
-> **AI meets Web3.** A marketplace where a Gemini-powered AI agent autonomously discovers, pays for, and calls external tools using two blockchain payment protocols.
+> **AI meets Web3.** A marketplace where a Gemini-powered AI agent autonomously discovers, pays for, and calls external tools. Payment runs over x402 on-chain escrow (live in the shipped UI); a second, off-chain rail (Yellow Network / Nitrolite state channels) is implemented and verified end-to-end on the backend but not yet wired into the UI.
 ---
 
 ## What is Agent402?
@@ -293,3 +293,35 @@ Sepolia explorer: [View contract](https://sepolia.etherscan.io/address/0x14b848b
 ## License
 
 MIT
+
+---
+
+## Tests
+
+```bash
+cd MarketplaceBackend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt -r requirements-dev.txt
+ruff check .
+pytest -q
+```
+
+No credentials or network are needed: MongoDB, the Sepolia RPC, Gemini and escrow settlement are replaced with in-process fakes.
+
+| Area | What is verified |
+|---|---|
+| `services/payment_verifier` | Accepts a USDC `Transfer` to the escrow for ≥ price; rejects wrong recipient, wrong token contract, underpayment and reverted transactions; ignores non-Transfer logs; polls for the receipt and gives up after N attempts |
+| `services/nitrolite_verifier` | Real secp256k1 signatures over the exact JS `JSON.stringify` payload (including non-ASCII); rejects wrong signer, tampered allocations, insufficient/wrong-asset allocations, tool/provider mismatch, ClearNode error responses, mismatched create-session proofs |
+| `services/pricing` | Exact decimal → atomic-unit conversion (`0.0157` → `15700`, where float math gave `15699`); rejects unrepresentable prices |
+| `routers/tools` | 402 challenge contents; verify → execute → release; failed tool → 502 + refund; verification failures never execute the tool; Nitrolite 403; register / approve / list behaviour with a fake collection |
+| `routers/gemini` | Tool name and parameter-schema sanitisation before anything reaches Gemini |
+
+CI runs the same two commands on every push/PR touching `MarketplaceBackend/` (`.github/workflows/backend-ci.yml`).
+
+## Known limitations (next up)
+
+- `/tools/register` and `/tools/{name}/approve` have no authentication; an approved `code` tool runs on the server with the full environment. Fix: admin bearer token, provider API keys, real sandboxing.
+- A verified payment tx hash can be replayed for a second execution. Fix: `consumed_payments` collection with a unique index on `tx_hash`, inserted before execution.
+- Escrow release/refund is awaited inside the request (adds ~12 s). Fix: return the result with `settlement: pending` and settle from the existing serial worker; expose `GET /receipts/{id}`.
+- No per-agent spend caps. Fix: atomic check-and-increment against a daily cap.
+- Registry cache and nonce queue assume a single instance.

@@ -2,7 +2,7 @@
 In-memory registry of approved tools — shared state between routers.
 Replaces the module-level dynamicRoutes, registeredProxies, MARKETPLACE_TOOLS in market.js.
 """
-from typing import Dict, Any
+from typing import Any, Dict
 
 # /tools/<name> → {price, description, walletAddress, ...}
 dynamic_routes: Dict[str, Dict[str, Any]] = {}
