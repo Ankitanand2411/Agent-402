@@ -31,6 +31,15 @@ class Settings(BaseSettings):
     #          the request, as the original implementation did (adds ~12 s).
     SETTLEMENT_MODE: str = "async"
 
+    # --- Tool retrieval ---
+    # Declare only the TOOL_RETRIEVAL_TOP_K tools most relevant to the request
+    # (by embedding similarity) instead of the whole catalog. 0 disables
+    # retrieval and declares everything, as before. Tools already used in the
+    # conversation are always included so chained calls keep working.
+    TOOL_RETRIEVAL_TOP_K: int = 8
+    TOOL_EMBED_MODEL: str = "gemini-embedding-001"
+    TOOL_EMBED_DIMENSIONS: int = 768
+
     # --- Guardrails ---
     # Maximum a single payer wallet may spend per UTC day, in USDC atomic units.
     # 0 disables the cap. Payments above the cap are refunded, not executed.

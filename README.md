@@ -205,6 +205,9 @@ ADMIN_API_KEY=long-random-string        # required for POST /tools/{name}/approv
 REQUIRE_PROVIDER_SIGNATURE=false        # true = /tools/register needs an EIP-191 signature from the payout wallet
 SETTLEMENT_MODE=async                   # async = respond first, settle escrow in background; sync = original behaviour
 DAILY_SPEND_CAP_UNITS=0                 # per-wallet daily cap in USDC atomic units (0 = off); over-cap payments are refunded
+TOOL_RETRIEVAL_TOP_K=8                  # declare only the k most relevant tools per turn (0 = declare the whole catalog)
+TOOL_EMBED_MODEL=gemini-embedding-001   # embedding model for tool descriptions and requests
+TOOL_EMBED_DIMENSIONS=768
 GROQ_API_KEY=your_groq_api_key
 ADZUNA_APP_ID=your_adzuna_id
 ADZUNA_APP_KEY=your_adzuna_key
@@ -325,6 +328,8 @@ No credentials or network are needed: MongoDB, the Sepolia RPC, Gemini and escro
 | `services/spend_caps` | Accumulation up to the cap, single over-cap rejection, refund releases budget, per-wallet isolation, ten concurrent reservations against one cap admit exactly the affordable number |
 | `services/auth` | Admin key via header or bearer, prefix/wrong key rejected, fail-closed when unset; EIP-191 signature accepted only from the payout wallet and only for the named tool |
 | async settlement | Response returns while the on-chain call is still blocked; receipt shows `pending` → `released`/`refunded`/`release-failed` after the task completes; shutdown drain |
+| `services/tool_retrieval` | Top-k by similarity with a bag-of-words fake embedder, must-include for tools already used, fail-open on disabled/small catalog/embedding failure/no key/blank query, embed-once caching, re-embed only changed descriptions, persistence and reload across index instances, foreign-model vectors ignored, query-text extraction rules |
+| `/gemini/chat` | Fake SDK client: retrieval narrows declarations, tool-result turns keep the tool in use, retrieval disabled declares all, usage reported |
 
 CI runs the same two commands on every push/PR touching `MarketplaceBackend/` (`.github/workflows/backend-ci.yml`).
 
@@ -339,8 +344,18 @@ CI runs the same two commands on every push/PR touching `MarketplaceBackend/` (`
 | Runaway agent / leaked worker key | `DAILY_SPEND_CAP_UNITS`: atomic `find_one_and_update` reservation per (wallet, UTC day); over-cap payments are refunded, never executed; refunds return budget | `429` with refund receipt |
 | Untrusted header data | Only the tx hash is read from `X-Payment`; payer and amount come from the on-chain receipt | — |
 
+## Tool retrieval
+
+Every function declaration sent to Gemini costs prompt tokens on every turn, and providers cap the number of declared tools, so declaring the whole catalog stops scaling past a few dozen tools. `services/tool_retrieval.py` applies retrieval (the same idea as RAG for documents) to the catalog:
+
+1. Each tool's name, description and parameter descriptions are embedded once (`RETRIEVAL_DOCUMENT` task type) and cached in memory and in the `tool_embeddings` collection, keyed by a hash of that text, so a tool is re-embedded only when its description changes.
+2. The request text (current message, or the last user message when the turn is a tool result) is embedded as a `RETRIEVAL_QUERY`.
+3. The top-`TOOL_RETRIEVAL_TOP_K` tools by cosine similarity are declared, plus any tool already called in the conversation, so chained plans are never cut off.
+4. Any failure (no key, embedding error, blank query) fails open and declares everything, as before.
+
+The chat response now includes `toolsDeclared`, `toolsAvailable` and `usage` (prompt / candidates / total tokens), and the server logs the same, which gives the before/after token number for the catalog size you run.
+
 ## Known limitations (next up)
 
 - An approved `code` tool runs on the server with the full environment (the "sandbox" is a CJS shim, not isolation). Fix: run untrusted tools in a separate container or a WASM/isolate runtime with no env access.
 - Registry cache, in-memory escrow queue and settlement tasks assume a single instance. Fix: move the queue to a durable job store and reconcile `settlement.status == "pending"` receipts on startup.
-- Gemini tool declarations are built from the whole catalog on every turn. Fix: embed tool descriptions and declare only the top-k relevant tools (see plan, Phase 3a).

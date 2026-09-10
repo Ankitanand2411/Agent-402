@@ -7,10 +7,11 @@ db = None
 tools_collection = None
 payments_collection = None   # payment ledger: replay protection + settlement receipts
 spend_collection = None      # per-wallet daily spend counters
+tool_embeddings_collection = None  # cached embeddings of tool descriptions
 
 
 async def connect_db():
-    global client, db, tools_collection, payments_collection, spend_collection
+    global client, db, tools_collection, payments_collection, spend_collection, tool_embeddings_collection
     client = AsyncIOMotorClient(settings.MONGODB_URI)
     # Use explicit database name — Mongoose defaults to the DB in the URI path;
     # the Atlas URI has no DB name, so we default to "agent402" (same as Mongoose model pluralisation)
@@ -22,6 +23,7 @@ async def connect_db():
     tools_collection = db["tools"]
     payments_collection = db["payment_receipts"]
     spend_collection = db["spend_counters"]
+    tool_embeddings_collection = db["tool_embeddings"]
     print("[MongoDB] Connected successfully")
 
 

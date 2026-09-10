@@ -14,6 +14,7 @@ from google.genai import types as genai_types
 
 from config import settings
 from models.tool import GeminiChatRequest
+from services import tool_retrieval
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -193,6 +194,18 @@ def _message_to_parts(message: Any) -> list[genai_types.Part]:
     return [genai_types.Part(text=str(message))]
 
 
+def _usage_of(response: Any) -> dict:
+    """Token accounting from the SDK response; the before/after number for tool retrieval."""
+    meta = getattr(response, "usage_metadata", None)
+    if not meta:
+        return {}
+    return {
+        "promptTokens": getattr(meta, "prompt_token_count", None),
+        "candidatesTokens": getattr(meta, "candidates_token_count", None),
+        "totalTokens": getattr(meta, "total_token_count", None),
+    }
+
+
 @router.post("/gemini/chat")
 async def gemini_chat(body: GeminiChatRequest):
     if not settings.GEMINI_API_KEY:
@@ -202,7 +215,9 @@ async def gemini_chat(body: GeminiChatRequest):
         )
 
     sanitized_tools = _sanitize_tools(body.tools or [])
-    declarations = _build_tool_declarations(sanitized_tools) if sanitized_tools else []
+    # Retrieval: declare only the tools relevant to this request (plus any already in use).
+    selected_tools = await tool_retrieval.select_for_request(sanitized_tools, body.history, body.message)
+    declarations = _build_tool_declarations(selected_tools) if selected_tools else []
 
     try:
         client = genai.Client(api_key=settings.GEMINI_API_KEY)
@@ -251,7 +266,20 @@ async def gemini_chat(body: GeminiChatRequest):
         except Exception:
             pass
 
-        return {"success": True, "text": text, "functionCalls": function_calls, "parts": parts_out}
+        usage = _usage_of(response)
+        logger.info(
+            "[Gemini] tools declared=%d/%d prompt_tokens=%s total_tokens=%s",
+            len(selected_tools), len(sanitized_tools), usage.get("promptTokens"), usage.get("totalTokens"),
+        )
+        return {
+            "success": True,
+            "text": text,
+            "functionCalls": function_calls,
+            "parts": parts_out,
+            "toolsDeclared": len(selected_tools),
+            "toolsAvailable": len(sanitized_tools),
+            "usage": usage,
+        }
 
     except Exception as e:
         logger.exception("Gemini API Error")
