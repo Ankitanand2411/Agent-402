@@ -26,3 +26,5 @@ services:
         value: "false"
       - key: TOOL_RETRIEVAL_TOP_K
         value: "8"
+      - key: MCP_ENABLED
+        value: "true"

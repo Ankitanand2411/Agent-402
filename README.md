@@ -305,6 +305,26 @@ MIT
 
 ---
 
+## MCP server
+
+The marketplace is also an [MCP](https://modelcontextprotocol.io) server at `/mcp` (Streamable HTTP, stateless), so any MCP client — Claude Desktop, Cursor, an agent framework — can discover the approved tools with their prices and call them. Calls are forwarded to this service's own `POST /tools/{name}`, so the x402 payment gate, replay ledger, spend cap and settlement apply unchanged; the MCP layer never holds a payer key.
+
+Paying is the x402 flow expressed as tool arguments:
+
+1. Call a tool without `payment` → `{"payment_required": true, "challenge": {payTo, maxAmountRequired, asset, network, …}}`
+2. The client's agent pays on-chain (or via Nitrolite), then calls again with `payment: {"method": "x402", "tx_hash": "0x…"}` (or `{"method": "nitrolite", "proof": "<base64>", "from": "0x…"}`)
+3. The result carries the tool output and the receipt; `get_payment_receipt(payment_key)` shows settlement status. Reusing a payment returns an error (the ledger's 409).
+
+Two meta tools: `list_marketplace_tools` (catalog, prices, instructions) and `get_payment_receipt`.
+
+Client configuration (Claude Desktop / Cursor style):
+
+```json
+{ "mcpServers": { "agent402": { "url": "https://<backend>/mcp" } } }
+```
+
+Settings: `MCP_ENABLED` (default true), `SELF_BASE_URL` (defaults to `http://127.0.0.1:$PORT`), `MCP_ALLOWED_HOSTS` (comma-separated; when set, enables DNS-rebinding protection for those hosts).
+
 ## Numbers
 
 `GET /metrics` (admin key) returns:
@@ -351,6 +371,7 @@ No credentials or network are needed: MongoDB, the Sepolia RPC, Gemini and escro
 | async settlement | Response returns while the on-chain call is still blocked; receipt shows `pending` → `released`/`refunded`/`release-failed` after the task completes; shutdown drain |
 | `services/tool_retrieval` | Top-k by similarity with a bag-of-words fake embedder, must-include for tools already used, fail-open on disabled/small catalog/embedding failure/no key/blank query, embed-once caching, re-embed only changed descriptions, persistence and reload across index instances, foreign-model vectors ignored, query-text extraction rules |
 | `/gemini/chat` | Fake SDK client: retrieval narrows declarations, tool-result turns keep the tool in use, retrieval disabled declares all, usage reported and recorded |
+| `mcp_server` | Tool list from the registry with prices and the payment schema, payment→header mapping for both rails, forwarding to the real payment gate (402 challenge without payment, result + receipt with payment, tool failure and unreachable marketplace as error results), and a real MCP client round trip in-process: initialize, list, challenge, pay, receipt, replay refused |
 | `services/telemetry` | Percentiles, Gemini turn aggregates (tokens, declaration ratio, errors), route aggregates, settlement statistics from ledger timestamps (delivery vs settlement medians, per rail/status), ledger timestamps written on delivery/settlement, admin-only `/metrics`, ledger failure does not break the endpoint |
 
 CI runs the same two commands on every push/PR touching `MarketplaceBackend/` (`.github/workflows/backend-ci.yml`).

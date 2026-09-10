@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 import database
+import mcp_server
 from config import settings
 from routers import gemini, info, metrics, tools
 from routers.tools import load_tools
@@ -47,7 +48,14 @@ async def lifespan(app: FastAPI):
         logger.warning("ADMIN_API_KEY is not set — /tools/{name}/approve will refuse all requests (503)")
     logger.info(f"⚙️  Settlement mode: {settings.SETTLEMENT_MODE}; daily spend cap: {settings.DAILY_SPEND_CAP_UNITS or 'off'}")
 
-    yield  # Server runs here
+    if settings.MCP_ENABLED:
+        # The session manager owns the MCP transport's task group; it must run
+        # for the lifetime of the app.
+        async with app.state.mcp_session_manager.run():
+            logger.info("🔌 MCP server mounted at /mcp (streamable HTTP, stateless)")
+            yield
+    else:
+        yield
 
     # Shutdown: let in-flight escrow releases/refunds finish before the worker stops
     await tools.drain_settlements(timeout=60)
@@ -89,6 +97,11 @@ async def log_requests(request: Request, call_next):
     telemetry.record_request(route=route, method=request.method, status=response.status_code, latency_ms=latency_ms)
     return response
 
+
+# MCP endpoint: mount the session manager's ASGI handler
+if settings.MCP_ENABLED:
+    app.state.mcp_session_manager = mcp_server.build_session_manager()
+    app.mount("/mcp", app.state.mcp_session_manager.handle_request)
 
 # Register routers
 app.include_router(info.router)
