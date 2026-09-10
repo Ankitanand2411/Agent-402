@@ -311,6 +311,25 @@ MIT
 
 ---
 
+## Server-side agent runs
+
+The agent loop also runs on the server as a LangGraph graph (`MarketplaceBackend/agent/`), checkpointed in MongoDB, so every run is durable, replayable and measurable. The browser keeps the wallets and only pays; the server plans and executes.
+
+```
+POST /agent/runs  {task, max_iterations?, max_spend_units?}
+      → plan (Gemini, tool retrieval) ─ no tool calls → done
+                                    └─ tool calls  → status "awaiting_payment", pending_calls[] each with an x402 challenge
+POST /agent/runs/{id}/pay  {payments: {call_id: {method:"x402", tx_hash}}}
+      → execute every call through POST /tools/{name} (verification, replay ledger, spend cap, settlement all apply)
+      → functionResponse turns appended → plan again … until the model answers, hits max_iterations, or the run budget
+GET  /agent/runs/{id}                 current view (status, plan_text, pending_calls, results, spend, tokens)
+POST /agent/runs/{id}/continue        re-run a step that failed (planner outage)
+```
+
+Free tools (price 0) run without a payment pause. `max_spend_units` stops a run *before* asking for payment it cannot afford. Each finished run is summarised in `agent_runs` (task, status, tool calls, spend, tokens) for analytics and evals; `/metrics` reports `agent_runs` aggregates. Run ids are unguessable and act as the capability to read or advance a run.
+
+The browser-side loop in `geminiService.js` still works and uses the same `/gemini/chat` planning call; switching the UI to `/agent/runs` is the next frontend change.
+
 ## MCP server
 
 The marketplace is also an [MCP](https://modelcontextprotocol.io) server at `/mcp` (Streamable HTTP, stateless), so any MCP client — Claude Desktop, Cursor, an agent framework — can discover the approved tools with their prices and call them. Calls are forwarded to this service's own `POST /tools/{name}`, so the x402 payment gate, replay ledger, spend cap and settlement apply unchanged; the MCP layer never holds a payer key.
@@ -379,6 +398,7 @@ No credentials or network are needed: MongoDB, the Sepolia RPC, Gemini and escro
 | `/gemini/chat` | Fake SDK client: retrieval narrows declarations, tool-result turns keep the tool in use, retrieval disabled declares all, usage reported and recorded |
 | `mcp_server` | Tool list from the registry with prices and the payment schema, payment→header mapping for both rails, forwarding to the real payment gate (402 challenge without payment, result + receipt with payment, tool failure and unreachable marketplace as error results), and a real MCP client round trip in-process: initialize, list, challenge, pay, receipt, replay refused |
 | `services/url_policy` + isolation | Every non-public address class rejected (loopback, RFC1918, metadata, multicast, reserved, IPv6 ULA/link-local/mapped), split-horizon hosts, local-style names before DNS, literal IPs, scheme/credentials/empty host, http only in dev; enforcement at register, approve and call time; redirects off; response cap; environment allowlist withholds server secrets; rlimits set; **real Node runs**: both shim paths execute with secrets withheld, a memory hog is killed, a slow tool times out |
+| `agent/` | Scripted planner + real paid path in-process: paid call pauses with a challenge and executes after payment; free tool runs without a pause; budget stops before payment; iteration cap; missing payment reported to the model, not executed; planner outage parks before `plan` and `/continue` resumes; unknown tool → 404 fed back; run summary recorded; HTTP lifecycle |
 | `services/telemetry` | Percentiles, Gemini turn aggregates (tokens, declaration ratio, errors), route aggregates, settlement statistics from ledger timestamps (delivery vs settlement medians, per rail/status), ledger timestamps written on delivery/settlement, admin-only `/metrics`, ledger failure does not break the endpoint |
 
 CI runs the same two commands on every push/PR touching `MarketplaceBackend/` (`.github/workflows/backend-ci.yml`).
@@ -410,6 +430,7 @@ The chat response now includes `toolsDeclared`, `toolsAvailable` and `usage` (pr
 ## Known limitations (next up)
 
 - An approved `code` tool still runs on the same host as the server. The environment allowlist and rlimits bound what it can read and consume, but a CJS shim is not isolation: it can still open network connections and read the tools directory. Real fix: a separate container or an isolate runtime (`isolated-vm`, Deno with explicit permissions) behind an internal API.
+- The frontend still runs its own agent loop (`geminiService.js`); the server-side runs exist alongside it until the UI switches to `/agent/runs`.
 - Registry (one in-memory dict, `registry.py`), in-memory escrow queue and settlement tasks assume a single instance. Fix: TTL reload or change stream for the registry, a durable job store for the queue, and reconcile `settlement.status == "pending"` receipts on startup.
 - Tool code is stored as-is and executed as-is. If the `get_audio` tool still carries the deprecated model/voice names, run `scripts/patch_stored_tool_code.py` once (dry run first); the executor no longer rewrites it at load time.
 - The receipt is returned both in the body and in the `X-Payment-Receipt` header because the frontend's failure path reads the header; drop the header once the frontend reads the body only.

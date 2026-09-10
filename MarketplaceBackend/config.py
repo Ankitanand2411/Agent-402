@@ -63,6 +63,12 @@ class Settings(BaseSettings):
     TOOL_EMBED_MODEL: str = "gemini-embedding-001"
     TOOL_EMBED_DIMENSIONS: int = 768
 
+    # --- Server-side agent runs ---
+    AGENT_MODEL: str = "gemini-2.5-flash"
+    AGENT_MAX_ITERATIONS: int = 5
+    AGENT_DEFAULT_MAX_SPEND_UNITS: int = 0        # 0 = no per-run budget unless the client sets one
+    AGENT_CHECKPOINT_DB: str = "agent_checkpoints"  # MongoDB database for LangGraph checkpoints
+
     # --- MCP server ---
     # Exposes approved marketplace tools to any MCP client at /mcp (Streamable
     # HTTP). Tool calls are forwarded to this same service's /tools/{name}

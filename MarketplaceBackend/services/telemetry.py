@@ -55,11 +55,31 @@ class _GeminiSeries:
     latencies_ms: deque = field(default_factory=lambda: deque(maxlen=MAX_SAMPLES))
 
 
+@dataclass
+class _AgentSeries:
+    runs: int = 0
+    iterations: int = 0
+    tool_calls: int = 0
+    tool_failures: int = 0
+    spend_units: int = 0
+    by_status: dict = field(default_factory=lambda: defaultdict(int))
+
+
 class Telemetry:
     def __init__(self):
         self.started_at = datetime.now(timezone.utc)
         self.http: dict[str, _Series] = defaultdict(_Series)
         self.gemini = _GeminiSeries()
+        self.agent = _AgentSeries()
+
+    def record_agent_run(self, *, status: str, iterations: int, tool_calls: int, tool_failures: int, spend_units: int) -> None:
+        a = self.agent
+        a.runs += 1
+        a.iterations += iterations
+        a.tool_calls += tool_calls
+        a.tool_failures += tool_failures
+        a.spend_units += spend_units
+        a.by_status[status] += 1
 
     def record_request(self, *, route: str, method: str, status: int, latency_ms: float) -> None:
         s = self.http[f"{method} {route}"]
@@ -106,12 +126,21 @@ class Telemetry:
                 "declaration_ratio": round(g.tools_declared / g.tools_available, 3) if g.tools_available else None,
                 "function_calls_per_turn": round(g.function_calls / turns, 2) if g.turns else None,
             },
-            "note": "http/gemini are in-memory per process and reset on restart; settlement comes from the ledger.",
+            "agent_runs": {
+                "runs": self.agent.runs,
+                "by_status": dict(self.agent.by_status),
+                "avg_iterations": round(self.agent.iterations / self.agent.runs, 2) if self.agent.runs else None,
+                "avg_tool_calls": round(self.agent.tool_calls / self.agent.runs, 2) if self.agent.runs else None,
+                "tool_failure_ratio": round(self.agent.tool_failures / self.agent.tool_calls, 3) if self.agent.tool_calls else None,
+                "avg_spend_units": round(self.agent.spend_units / self.agent.runs, 1) if self.agent.runs else None,
+            },
+            "note": "http/gemini/agent_runs are in-memory per process and reset on restart; settlement comes from the ledger.",
         }
 
     def reset(self) -> None:
         self.http.clear()
         self.gemini = _GeminiSeries()
+        self.agent = _AgentSeries()
         self.started_at = datetime.now(timezone.utc)
 
 

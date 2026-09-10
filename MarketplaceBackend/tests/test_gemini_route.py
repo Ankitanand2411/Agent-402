@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 import database
 from config import settings
 from routers import gemini as gemini_module
+from services import gemini_agent
 from services import telemetry as tm
 from services import tool_retrieval as tr
 from tests.test_tool_retrieval import TOOLS, BagOfWordsEmbedder, FakeEmbeddingsCollection
@@ -41,7 +42,7 @@ def env(monkeypatch):
     monkeypatch.setattr(settings, "TOOL_RETRIEVAL_TOP_K", 2)
     monkeypatch.setattr(database, "tool_embeddings_collection", FakeEmbeddingsCollection())
     monkeypatch.setattr(tr, "_index", tr.ToolIndex(BagOfWordsEmbedder()))
-    monkeypatch.setattr(gemini_module.genai, "Client", lambda api_key: SimpleNamespace(models=FakeModels(rec)))
+    monkeypatch.setattr(gemini_agent.genai, "Client", lambda api_key: SimpleNamespace(models=FakeModels(rec)))
     app = FastAPI()
     app.include_router(gemini_module.router)
     return TestClient(app), rec
