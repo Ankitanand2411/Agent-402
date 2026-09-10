@@ -328,7 +328,7 @@ POST /agent/runs/{id}/continue        re-run a step that failed (planner outage)
 
 Free tools (price 0) run without a payment pause. `max_spend_units` stops a run *before* asking for payment it cannot afford. Each finished run is summarised in `agent_runs` (task, status, tool calls, spend, tokens) for analytics and evals; `/metrics` reports `agent_runs` aggregates. Run ids are unguessable and act as the capability to read or advance a run.
 
-The browser-side loop in `geminiService.js` still works and uses the same `/gemini/chat` planning call; switching the UI to `/agent/runs` is the next frontend change.
+The UI uses the server-side runs by default (`src/services/serverAgent.js`): it pays each `pending_calls` challenge with the browser's wallets (Nitrolite channel when funded, Sepolia escrow otherwise) and posts the proofs to `/pay`. Set `VITE_AGENT_MODE=client` on the frontend to fall back to the in-browser loop in `geminiService.js`.
 
 ## MCP server
 
@@ -430,7 +430,7 @@ The chat response now includes `toolsDeclared`, `toolsAvailable` and `usage` (pr
 ## Known limitations (next up)
 
 - An approved `code` tool still runs on the same host as the server. The environment allowlist and rlimits bound what it can read and consume, but a CJS shim is not isolation: it can still open network connections and read the tools directory. Real fix: a separate container or an isolate runtime (`isolated-vm`, Deno with explicit permissions) behind an internal API.
-- The frontend still runs its own agent loop (`geminiService.js`); the server-side runs exist alongside it until the UI switches to `/agent/runs`.
+- The in-browser loop (`geminiService.js`) is kept behind `VITE_AGENT_MODE=client` as a fallback; remove it once the server-side runs have been exercised in production.
 - Registry (one in-memory dict, `registry.py`), in-memory escrow queue and settlement tasks assume a single instance. Fix: TTL reload or change stream for the registry, a durable job store for the queue, and reconcile `settlement.status == "pending"` receipts on startup.
 - Tool code is stored as-is and executed as-is. If the `get_audio` tool still carries the deprecated model/voice names, run `scripts/patch_stored_tool_code.py` once (dry run first); the executor no longer rewrites it at load time.
 - The receipt is returned both in the body and in the `X-Payment-Receipt` header because the frontend's failure path reads the header; drop the header once the frontend reads the body only.

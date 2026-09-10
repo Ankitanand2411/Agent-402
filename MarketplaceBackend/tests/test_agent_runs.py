@@ -116,6 +116,7 @@ async def test_paid_tool_pauses_for_payment_then_completes(marketplace, monkeypa
     [call] = intr["calls"]
     assert call["name"] == "echo" and call["price_units"] == 500_000
     assert call["challenge"]["payTo"] == ESCROW_ADDR and call["challenge"]["maxAmountRequired"] == "500000"
+    assert call["challenge"]["toolProvider"] == PROVIDER_ADDR                # Nitrolite path needs the provider wallet
     assert marketplace["execute"].calls == []                                # nothing ran before payment
 
     await graph.ainvoke(Command(resume={"payments": {call["id"]: {"method": "x402", "tx_hash": TX}}}), CFG)
@@ -246,3 +247,15 @@ def test_run_view_never_includes_payment_secrets_or_keys(client, monkeypatch):
     dumped = str(v)
     assert "ESCROW_PRIVATE_KEY" not in dumped and settings.ESCROW_PRIVATE_KEY not in dumped
     assert v["status"] == "done" and v["transcript_length"] == 2
+
+
+def test_start_run_seeds_prior_chat_history(client, monkeypatch):
+    planner = script(monkeypatch, [FINAL])
+    history = [{"role": "user", "parts": [{"text": "earlier question"}]},
+               {"role": "assistant", "parts": [{"text": "earlier answer"}, {"functionCall": {"name": "x"}}]},
+               {"role": "user", "parts": []}]
+    v = client.post("/agent/runs", json={"task": "follow-up", "history": history}).json()
+    assert v["status"] == "done" and v["transcript_length"] == 4          # 2 kept turns + task + model answer
+    seen = planner["histories"][0]
+    assert [t["role"] for t in seen] == ["user", "model", "user"]
+    assert seen[1]["parts"] == [{"text": "earlier answer"}]                # function parts dropped, text kept

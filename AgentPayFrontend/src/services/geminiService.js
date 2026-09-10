@@ -2,7 +2,7 @@ import { ethers } from "ethers";
 import { BNB_CHAIN, TOKEN_ADDRESS, TOKEN_DECIMALS } from "../config/bnb";
 import envConfig from '../config/env';
 import { getAgentWallet } from './agentWallet';
-import { canPayWithNitrolite, payToolWithNitrolite, getNitroliteStatus } from './nitroliteService';
+import { canPayWithNitrolite, payToolWithNitrolite } from './nitroliteService';
 
 const toolDataMap = new Map();
 
@@ -329,7 +329,7 @@ export const callPaidTool = async (toolName, params) => {
 
     const serverReceiptHeader = response.headers.get('X-Payment-Receipt');
     if (serverReceiptHeader) {
-      try { receipt.serverAttestation = JSON.parse(serverReceiptHeader); } catch (e) { }
+      try { receipt.serverAttestation = JSON.parse(serverReceiptHeader); } catch { /* header not JSON */ }
     }
 
     const data = await response.json();
@@ -397,8 +397,7 @@ export const processQueryWithGemini = async (userQuery, availableTools, onProgre
             errorMessage += ` | ${typeof errorPayload.details === 'string' ? errorPayload.details : JSON.stringify(errorPayload.details)}`;
           }
         }
-      } catch (_) {
-      }
+      } catch { /* body was not JSON */ }
       throw new Error(errorMessage);
     }
 

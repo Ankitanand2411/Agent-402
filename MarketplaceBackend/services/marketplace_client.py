@@ -38,9 +38,10 @@ def payment_headers(payment: dict[str, Any] | None) -> dict[str, str]:
     return headers
 
 
-def payment_challenge(tool_name: str, price_units: int) -> dict[str, Any]:
+def payment_challenge(tool_name: str, price_units: int, provider_wallet: str | None = None) -> dict[str, Any]:
     """The same challenge POST /tools/{name} returns with 402, computed without a round trip."""
     return {
+        "toolProvider": provider_wallet or settings.DEFAULT_EVM_WALLET or "",
         "scheme": "x402",
         "payTo": settings.ESCROW_CONTRACT_ADDRESS,
         "maxAmountRequired": str(price_units),

@@ -237,7 +237,7 @@ class BnbChannelManager {
         if (!this.initialized) return;
         for (const ch of this.channels) {
             if (!ch.isBusy && !this.isFunding) {
-                try { await this.ensureFunds(ch, 0); } catch (e) { /* ignore in background */ }
+                try { await this.ensureFunds(ch, 0); } catch { /* ignore in background */ }
             } else {
                 await this.updateChannelBalance(ch);
             }
