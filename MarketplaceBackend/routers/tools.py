@@ -291,6 +291,22 @@ async def call_tool(tool_name: str, request: Request):
         logger.error(f"[Pricing] Tool '{tool_name}' has an invalid price: {e}")
         return JSONResponse(status_code=500, content={"success": False, "error": f"Tool '{tool_name}' has a misconfigured price"})
 
+    # Free tools (price 0) skip the payment gate, the ledger and settlement entirely.
+    if price_units == 0:
+        body = await request.json()
+        try:
+            if tool_config.get("type") == "code":
+                result = await execute_code_tool(tool_name, body, trusted=tool_config.get("trusted", False))
+            else:
+                result = await execute_proxy_tool(tool_config.get("targetUrl", ""), body)
+            tool_success = result.get("success", True)
+        except Exception as e:
+            logger.error(f"[Execution] Error calling free tool {tool_name}: {e}")
+            tool_success, result = False, {"success": False, "result": "Tool execution failed", "error": str(e)}
+        if isinstance(result, dict):
+            result["receipt"] = {"free": True, "toolName": tool_name}
+        return JSONResponse(status_code=200 if tool_success else 502, content=result)
+
     # Parse payment headers
     x_payment = request.headers.get("x-payment")
     x_payment_tx = request.headers.get("x-payment-tx")

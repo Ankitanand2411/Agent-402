@@ -11,7 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import database
 import mcp_server
+from agent.graph import build_graph as build_agent_graph
 from config import settings
+from routers import agent as agent_router
 from routers import gemini, info, metrics, tools
 from routers.tools import load_tools
 from services import escrow_service
@@ -42,6 +44,20 @@ async def lifespan(app: FastAPI):
     logger.info(
         f"🔒 Escrow Contract: {settings.ESCROW_CONTRACT_ADDRESS or 'NOT SET — deploy via Remix and set ESCROW_CONTRACT_ADDRESS in .env'}"
     )
+
+    # Server-side agent runs: durable in MongoDB when configured, in memory otherwise.
+    if settings.MONGODB_URI:
+        from langgraph.checkpoint.mongodb import MongoDBSaver
+        from pymongo import MongoClient
+
+        saver = MongoDBSaver(MongoClient(settings.MONGODB_URI), db_name=settings.AGENT_CHECKPOINT_DB)
+        logger.info(f"🧭 Agent runs checkpointed in MongoDB ({settings.AGENT_CHECKPOINT_DB})")
+    else:
+        from langgraph.checkpoint.memory import InMemorySaver
+
+        saver = InMemorySaver()
+        logger.warning("Agent runs are checkpointed in memory (MONGODB_URI unset); they are lost on restart")
+    app.state.agent_graph = build_agent_graph(saver)
 
     if not settings.ADMIN_API_KEY:
         logger.warning("ADMIN_API_KEY is not set — /tools/{name}/approve will refuse all requests (503)")
@@ -101,3 +117,4 @@ app.include_router(info.router)
 app.include_router(gemini.router)
 app.include_router(tools.router)
 app.include_router(metrics.router)
+app.include_router(agent_router.router)

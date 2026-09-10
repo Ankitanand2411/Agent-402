@@ -440,3 +440,14 @@ def test_failed_tool_refund_gives_budget_back(client, echo_tool, collaborators, 
     collaborators["execute"].error = None
     tx2 = "0x" + "ef" * 32
     assert client.post("/tools/echo", json={}, headers={"X-Payment-Tx": tx2}).status_code == 200  # budget was released
+
+
+# ─── Free tools ───────────────────────────────────────────────────────────────
+
+def test_free_tool_executes_without_payment_or_ledger(client, echo_tool, collaborators, fake_ledger):
+    echo_tool.register({**ECHO_TOOL_DOC, "name": "free_echo", "price": "0"})
+    r = client.post("/tools/free_echo", json={"text": "hi"})
+    assert r.status_code == 200
+    assert r.json()["data"] == {"echo": "hi"} and r.json()["receipt"] == {"free": True, "toolName": "free_echo"}
+    assert fake_ledger.docs == {}                                    # no payment, nothing to claim
+    assert collaborators["release"].calls == [] and collaborators["verify"].calls == []

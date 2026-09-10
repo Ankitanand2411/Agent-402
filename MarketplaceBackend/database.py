@@ -8,16 +8,18 @@ tools_collection = None
 payments_collection = None         # payment ledger: replay protection + settlement receipts
 spend_collection = None            # per-wallet daily spend counters
 tool_embeddings_collection = None  # cached embeddings of tool descriptions
+agent_runs_collection = None       # summaries of server-side agent runs (for analytics and evals)
 
 
 async def connect_db():
-    global client, db, tools_collection, payments_collection, spend_collection, tool_embeddings_collection
+    global client, db, tools_collection, payments_collection, spend_collection, tool_embeddings_collection, agent_runs_collection
     client = AsyncIOMotorClient(settings.MONGODB_URI)
     db = client[settings.MONGODB_DB_NAME]
     tools_collection = db["tools"]
     payments_collection = db["payment_receipts"]
     spend_collection = db["spend_counters"]
     tool_embeddings_collection = db["tool_embeddings"]
+    agent_runs_collection = db["agent_runs"]
     print(f"[MongoDB] Connected (database: {settings.MONGODB_DB_NAME})")
 
 

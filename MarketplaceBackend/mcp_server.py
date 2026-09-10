@@ -33,8 +33,9 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 import registry
 from config import settings
-from routers.gemini import _sanitize_parameters
+from services import marketplace_client
 from services import payments_ledger as ledger
+from services.gemini_agent import sanitize_parameters as _sanitize_parameters
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +68,8 @@ PAYMENT_INSTRUCTIONS = (
 # ─── Catalog ──────────────────────────────────────────────────────────────────
 
 def _client_factory() -> httpx.AsyncClient:
-    """HTTP client to this service. Tests replace it with an in-process ASGI client."""
-    base = settings.SELF_BASE_URL or f"http://127.0.0.1:{settings.PORT}"
-    return httpx.AsyncClient(base_url=base, timeout=310.0)
+    """HTTP client to this service (delegates to the shared factory; tests replace this name)."""
+    return marketplace_client.client_factory()
 
 
 def _marketplace_tools() -> list[dict[str, Any]]:
@@ -116,23 +116,7 @@ def build_tool_list() -> list[types.Tool]:
 
 # ─── Forwarding ───────────────────────────────────────────────────────────────
 
-def payment_headers(payment: dict[str, Any] | None) -> dict[str, str]:
-    if not payment:
-        return {}
-    method = (payment.get("method") or ("nitrolite" if payment.get("proof") else "x402")).lower()
-    if method == "nitrolite":
-        headers = {"X-Payment-Method": "nitrolite"}
-        if payment.get("proof"):
-            headers["X-Nitrolite-Proof"] = str(payment["proof"])
-        if payment.get("from"):
-            headers["X-Nitrolite-From"] = str(payment["from"])
-        return headers
-    headers = {}
-    if payment.get("tx_hash"):
-        headers["X-Payment-Tx"] = str(payment["tx_hash"])
-    if payment.get("x_payment"):
-        headers["X-Payment"] = str(payment["x_payment"])
-    return headers
+payment_headers = marketplace_client.payment_headers
 
 
 def _result(payload: dict[str, Any], *, is_error: bool = False) -> types.CallToolResult:
