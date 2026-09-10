@@ -34,7 +34,7 @@ class SlowRecorder:
 
 
 @pytest.fixture
-async def env(monkeypatch, clean_registry, fake_ledger, fake_spend):
+async def env(monkeypatch, clean_registry, fake_ledger, fake_spend, permissive_urls):
     monkeypatch.setattr(settings, "ESCROW_CONTRACT_ADDRESS", ESCROW_ADDR)
     monkeypatch.setattr(settings, "ESCROW_PRIVATE_KEY", "0x" + "33" * 32)
     monkeypatch.setattr(settings, "SETTLEMENT_MODE", "async")

@@ -28,3 +28,7 @@ services:
         value: "8"
       - key: MCP_ENABLED
         value: "true"
+      - key: TOOL_ENV_ALLOWLIST
+        value: "GROQ_API_KEY,ADZUNA_APP_ID,ADZUNA_APP_KEY"
+      - key: ALLOW_INSECURE_TOOL_URLS
+        value: "false"

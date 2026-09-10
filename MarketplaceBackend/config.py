@@ -24,6 +24,18 @@ class Settings(BaseSettings):
         "https://agent402-skale.vercel.app,https://agent402-goodvibes.vercel.app"
     )
 
+    # --- Tool execution isolation ---
+    # Environment variables a code tool's subprocess may read. Everything else
+    # (ESCROW_PRIVATE_KEY, MONGODB_URI, GEMINI_API_KEY, ADMIN_API_KEY, ...) is
+    # withheld. Add a tool's own secrets here explicitly.
+    TOOL_ENV_ALLOWLIST: str = "GROQ_API_KEY,ADZUNA_APP_ID,ADZUNA_APP_KEY"
+    TOOL_TIMEOUT_SECONDS: float = 30.0
+    TOOL_MAX_MEMORY_MB: int = 512
+    TOOL_MAX_CPU_SECONDS: int = 30
+    # Proxy tools may only target public https hosts. Set true for local development.
+    ALLOW_INSECURE_TOOL_URLS: bool = False
+    PROXY_MAX_RESPONSE_BYTES: int = 1_000_000
+
     # --- Security ---
     # Bearer token required on admin endpoints (/tools/{name}/approve). Approval
     # makes provider-submitted code executable on this server, so this endpoint

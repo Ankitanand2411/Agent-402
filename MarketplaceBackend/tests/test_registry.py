@@ -6,7 +6,7 @@ from tests.conftest import ECHO_TOOL_DOC
 
 def test_register_and_view(clean_registry):
     rec = registry.register(ECHO_TOOL_DOC)
-    assert rec["type"] == "proxy" and rec["targetUrl"] == "http://tool.local/echo" and rec["codePath"] is None
+    assert rec["type"] == "proxy" and rec["targetUrl"] == "http://tool.example/echo" and rec["codePath"] is None
     assert registry.get("echo") is rec
     [view] = registry.marketplace_view()
     assert view == {"name": "echo", "description": "Echoes its input", "price": "0.5", "parameters": ECHO_TOOL_DOC["parameters"]}

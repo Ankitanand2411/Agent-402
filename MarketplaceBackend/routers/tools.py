@@ -24,6 +24,7 @@ from services.escrow_service import refund_escrow, release_escrow
 from services.nitrolite_verifier import verify_nitrolite_proof
 from services.payment_verifier import verify_onchain_payment
 from services.pricing import price_to_units
+from services.url_policy import UnsafeURL, validate_target_url
 from tool_executor.executor import execute_code_tool, execute_proxy_tool, normalize_tool_code
 
 logger = logging.getLogger(__name__)
@@ -125,6 +126,11 @@ async def register_tool(body: ToolCreate, request: Request):
         return JSONResponse(status_code=400, content={"success": False, "error": "Missing required fields: name, price"})
     if body.type == "proxy" and not body.targetUrl:
         return JSONResponse(status_code=400, content={"success": False, "error": "Proxy tools require targetUrl"})
+    if body.type == "proxy":
+        try:
+            body.targetUrl = validate_target_url(body.targetUrl)
+        except UnsafeURL as e:
+            return JSONResponse(status_code=400, content={"success": False, "error": f"targetUrl rejected: {e}"})
     if body.type == "code" and not body.code:
         return JSONResponse(status_code=400, content={"success": False, "error": "Code tools require code"})
 
@@ -176,6 +182,12 @@ async def approve_tool(name: str):
         return JSONResponse(status_code=404, content={"success": False, "error": "Tool not found"})
     if tool.get("status") == "approved":
         return JSONResponse(status_code=400, content={"success": False, "error": "Tool already approved"})
+
+    if tool.get("type", "proxy") == "proxy":
+        try:
+            validate_target_url(tool.get("targetUrl", ""))
+        except UnsafeURL as e:
+            return JSONResponse(status_code=400, content={"success": False, "error": f"targetUrl rejected: {e}"})
 
     await database.tools_collection.update_one({"name": name}, {"$set": {"status": "approved"}})
     _register_tool({**tool, "status": "approved"})

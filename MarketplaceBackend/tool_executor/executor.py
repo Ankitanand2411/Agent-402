@@ -7,10 +7,14 @@ import asyncio
 import json
 import logging
 import os
+import resource
 import tempfile
 from pathlib import Path
 
 import httpx
+
+from config import settings
+from services.url_policy import validate_target_url
 
 logger = logging.getLogger(__name__)
 
@@ -33,19 +37,30 @@ def normalize_tool_code(raw_code: str) -> str:
 # ---------------------------------------------------------------------------
 
 async def execute_proxy_tool(target_url: str, body: dict) -> dict:
-    """Forward the request body to the tool provider's URL."""
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await client.post(
-            target_url,
-            json=body,
-            headers={"Content-Type": "application/json"},
-        )
-        data = response.json()
-        return {
-            "success": response.is_success,
-            "result": "Tool call successful" if response.is_success else "Tool call failed upstream",
-            "data": data,
-        }
+    """
+    Forward the request body to the tool provider's URL.
+
+    The URL is re-validated at call time (its DNS may have changed since
+    approval), redirects are never followed, and the response is capped so a
+    provider cannot make this server buffer gigabytes.
+    """
+    target_url = validate_target_url(target_url)
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=False) as client:
+        async with client.stream("POST", target_url, json=body, headers={"Content-Type": "application/json"}) as response:
+            raw = bytearray()
+            async for chunk in response.aiter_bytes():
+                raw.extend(chunk)
+                if len(raw) > settings.PROXY_MAX_RESPONSE_BYTES:
+                    raise RuntimeError(f"upstream response exceeded {settings.PROXY_MAX_RESPONSE_BYTES} bytes")
+            try:
+                data = json.loads(bytes(raw)) if raw else None
+            except json.JSONDecodeError:
+                data = bytes(raw).decode("utf-8", errors="replace")
+            return {
+                "success": response.is_success,
+                "result": "Tool call successful" if response.is_success else "Tool call failed upstream",
+                "data": data,
+            }
 
 
 # ---------------------------------------------------------------------------
@@ -71,10 +86,13 @@ console.log(JSON.stringify(result));
 """
 
 # Sandboxed runner (no module imports — for untrusted tools)
+# `exports` is already a parameter of Node's CommonJS wrapper, so a shim that
+# declared `const exports` was a SyntaxError and every untrusted tool failed to
+# load. Use a private identifier instead.
 _JS_SANDBOX_TEMPLATE = """
-const exports = {{}};
+const __tool_exports = {{}};
 {tool_code}
-const fn = exports.default;
+const fn = __tool_exports.default;
 if (typeof fn !== 'function') {{
   process.stderr.write('Sandboxed code did not export a default function');
   process.exit(1);
@@ -86,10 +104,43 @@ fn({tool_input_json}).then(r => console.log(JSON.stringify(r))).catch(e => {{
 """
 
 
+def tool_environment() -> dict[str, str]:
+    """
+    The environment a tool subprocess gets: a minimal base plus the allowlisted
+    variables. The server's own secrets are never in it.
+    """
+    env = {k: os.environ[k] for k in ("PATH", "HOME", "LANG", "TMPDIR", "NODE_PATH") if k in os.environ}
+    for name in (n.strip() for n in settings.TOOL_ENV_ALLOWLIST.split(",")):
+        if name and name in os.environ:
+            env[name] = os.environ[name]
+    return env
+
+
+def _limit_resources() -> None:
+    """
+    Runs in the child before exec: cap memory and CPU so a tool cannot exhaust the host.
+
+    RLIMIT_DATA, not RLIMIT_AS: V8 reserves gigabytes of virtual address space
+    (its code range) at startup without touching it, so an address-space limit
+    of a few hundred MB kills Node immediately. RLIMIT_DATA counts memory that
+    is actually allocated, which is what we want to bound; --max-old-space-size
+    caps the JS heap on top.
+    """
+    mem = settings.TOOL_MAX_MEMORY_MB * 1024 * 1024
+    cpu = settings.TOOL_MAX_CPU_SECONDS
+    for kind, value in ((resource.RLIMIT_DATA, (mem, mem)), (resource.RLIMIT_CPU, (cpu, cpu)), (resource.RLIMIT_NPROC, (64, 64))):
+        try:
+            resource.setrlimit(kind, value)
+        except (ValueError, OSError):
+            pass  # some platforms/containers refuse; best effort
+
+
 async def execute_code_tool(tool_name: str, body: dict, trusted: bool = False) -> dict:
     """
-    Execute a JS tool file using a Node.js subprocess.
-    Trusted tools use ESM dynamic import; untrusted tools use a sandboxed CJS shim.
+    Execute a JS tool file using a Node.js subprocess with a minimal environment
+    and resource limits. Trusted tools use ESM dynamic import; untrusted tools
+    use a CJS shim. Neither is real isolation (see README); the environment
+    allowlist and rlimits bound the damage.
     """
     code_path = USER_TOOLS_DIR / f"{tool_name}.js"
     if not code_path.exists():
@@ -113,7 +164,7 @@ async def execute_code_tool(tool_name: str, body: dict, trusted: bool = False) -
         runner_ext = ".mjs"
     else:
         # CJS shim (not real isolation; see README known limitations)
-        sandboxed_code = normalized_code.replace("export default ", "exports.default = ")
+        sandboxed_code = normalized_code.replace("export default ", "__tool_exports.default = ")
         runner_content = _JS_SANDBOX_TEMPLATE.format(
             tool_code=sandboxed_code,
             tool_input_json=tool_input_json,
@@ -128,16 +179,17 @@ async def execute_code_tool(tool_name: str, body: dict, trusted: bool = False) -
 
     try:
         proc = await asyncio.create_subprocess_exec(
-            "node", runner_path,
+            "node", f"--max-old-space-size={settings.TOOL_MAX_MEMORY_MB // 2}", runner_path,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(USER_TOOLS_DIR),
-            env={**os.environ},  # pass full env so tools can read GROQ_API_KEY etc.
+            env=tool_environment(),
+            preexec_fn=_limit_resources,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=settings.TOOL_TIMEOUT_SECONDS)
     except asyncio.TimeoutError as e:
         proc.kill()
-        raise RuntimeError(f"Tool {tool_name} timed out after 30s") from e
+        raise RuntimeError(f"Tool {tool_name} timed out after {settings.TOOL_TIMEOUT_SECONDS:g}s") from e
     finally:
         try:
             os.unlink(runner_path)

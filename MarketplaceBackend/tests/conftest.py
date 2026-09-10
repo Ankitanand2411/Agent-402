@@ -79,7 +79,7 @@ ECHO_TOOL_DOC = {
     "description": "Echoes its input COSTS: 0.5 USDC",
     "price": "0.5",
     "type": "proxy",
-    "targetUrl": "http://tool.local/echo",
+    "targetUrl": "http://tool.example/echo",
     "walletAddress": PROVIDER_ADDR,
     "parameters": {"type": "object", "properties": {"text": {"type": "string", "description": "What to echo"}}, "required": ["text"]},
     "status": "approved",
@@ -197,3 +197,15 @@ def fake_spend(monkeypatch):
     coll = FakeSpendCollection()
     monkeypatch.setattr(database, "spend_collection", coll)
     return coll
+
+
+@pytest.fixture
+def permissive_urls(monkeypatch):
+    """Router tests use fake hosts like http://tool.example; skip DNS and allow http."""
+    import ipaddress
+
+    from config import settings
+    from services import url_policy
+
+    monkeypatch.setattr(settings, "ALLOW_INSECURE_TOOL_URLS", True)
+    monkeypatch.setattr(url_policy, "resolve", lambda host: [ipaddress.ip_address("93.184.216.34")])
