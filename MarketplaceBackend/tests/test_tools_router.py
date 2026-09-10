@@ -22,10 +22,18 @@ from tests.conftest import ESCROW_ADDR, PAYER_ADDR, PROVIDER_ADDR
 TX = "0x" + "cd" * 32
 
 
+ADMIN = {"Authorization": "Bearer test-admin-key"}
+
+
 @pytest.fixture
-def client(monkeypatch, clean_registry, fake_collection):
+def client(monkeypatch, clean_registry, fake_collection, fake_ledger, fake_spend):
     monkeypatch.setattr(settings, "ESCROW_CONTRACT_ADDRESS", ESCROW_ADDR)
     monkeypatch.setattr(settings, "ESCROW_PRIVATE_KEY", "0x" + "33" * 32)
+    monkeypatch.setattr(settings, "ADMIN_API_KEY", "test-admin-key")
+    # These tests assert on the final settlement status inline, so they run the
+    # original synchronous settlement path. Async mode has its own module.
+    monkeypatch.setattr(settings, "SETTLEMENT_MODE", "sync")
+    monkeypatch.setattr(settings, "DAILY_SPEND_CAP_UNITS", 0)
     app = FastAPI()
     app.include_router(tools_router.router)
     with TestClient(app) as c:
@@ -268,7 +276,7 @@ def test_approve_hot_loads_tool_into_registry(client, fake_collection, clean_reg
         "type": "proxy", "targetUrl": "http://w.local/run", "walletAddress": PROVIDER_ADDR, "status": "pending",
     })
 
-    r = client.post("/tools/weather/approve")
+    r = client.post("/tools/weather/approve", headers=ADMIN)
 
     assert r.status_code == 200
     assert fake_collection.updates == [({"name": "weather"}, {"$set": {"status": "approved"}})]
@@ -283,12 +291,12 @@ def test_approve_hot_loads_tool_into_registry(client, fake_collection, clean_reg
 
 
 def test_approve_unknown_tool_is_404(client, fake_collection):
-    assert client.post("/tools/ghost/approve").status_code == 404
+    assert client.post("/tools/ghost/approve", headers=ADMIN).status_code == 404
 
 
 def test_approve_twice_is_400(client, fake_collection):
     fake_collection.docs.append({"name": "w", "description": "d", "price": "1", "status": "approved"})
-    assert client.post("/tools/w/approve").status_code == 400
+    assert client.post("/tools/w/approve", headers=ADMIN).status_code == 400
 
 
 def test_list_tools_loads_approved_from_db(client, fake_collection, clean_registry):
@@ -300,3 +308,148 @@ def test_list_tools_loads_approved_from_db(client, fake_collection, clean_regist
     assert r.status_code == 200
     assert [t["name"] for t in r.json()] == ["a"]                 # pending tools are not served
     assert r.json()[0]["description"] == "A"                      # COSTS suffix stripped for the agent
+
+
+# ─── Admin auth on approval ───────────────────────────────────────────────────
+
+def test_approve_without_admin_key_is_401_and_changes_nothing(client, fake_collection, clean_registry):
+    fake_collection.docs.append({"name": "w", "description": "d", "price": "1", "type": "proxy", "targetUrl": "http://x", "status": "pending"})
+    assert client.post("/tools/w/approve").status_code == 401
+    assert client.post("/tools/w/approve", headers={"Authorization": "Bearer wrong"}).status_code == 401
+    assert fake_collection.updates == []
+    assert clean_registry.dynamic_routes == {}
+
+
+def test_approve_fails_closed_when_admin_key_unconfigured(client, fake_collection, monkeypatch):
+    monkeypatch.setattr(settings, "ADMIN_API_KEY", "")
+    fake_collection.docs.append({"name": "w", "description": "d", "price": "1", "status": "pending"})
+    assert client.post("/tools/w/approve", headers=ADMIN).status_code == 503
+
+
+# ─── Provider signature on registration ───────────────────────────────────────
+
+def _provider_sig(tool: str, wallet: str, key: str) -> str:
+    from eth_account import Account
+    from eth_account.messages import encode_defunct
+
+    from services.auth import registration_message
+    return Account.sign_message(encode_defunct(text=registration_message(tool, wallet)), private_key=key).signature.hex()
+
+
+def test_register_with_valid_signature_marks_provider_verified(client, fake_collection):
+    from eth_account import Account
+    key = "0x" + "66" * 32
+    wallet = Account.from_key(key).address
+    r = client.post(
+        "/tools/register",
+        json={"name": "signed_tool", "description": "d", "price": "1", "type": "proxy", "targetUrl": "http://x", "walletAddress": wallet},
+        headers={"X-Provider-Signature": _provider_sig("signed_tool", wallet, key)},
+    )
+    assert r.status_code == 200
+    assert fake_collection.inserted[0]["providerVerified"] is True
+
+
+def test_register_with_wrong_signature_is_401(client, fake_collection):
+    from eth_account import Account
+    wallet = Account.from_key("0x" + "66" * 32).address
+    r = client.post(
+        "/tools/register",
+        json={"name": "t", "description": "d", "price": "1", "type": "proxy", "targetUrl": "http://x", "walletAddress": wallet},
+        headers={"X-Provider-Signature": _provider_sig("t", wallet, "0x" + "77" * 32)},
+    )
+    assert r.status_code == 401
+    assert fake_collection.inserted == []
+
+
+def test_register_without_signature_is_open_unless_required(client, fake_collection, monkeypatch):
+    body = {"name": "t", "description": "d", "price": "1", "type": "proxy", "targetUrl": "http://x", "walletAddress": PROVIDER_ADDR}
+    assert client.post("/tools/register", json=body).status_code == 200
+    assert fake_collection.inserted[-1]["providerVerified"] is False
+
+    monkeypatch.setattr(settings, "REQUIRE_PROVIDER_SIGNATURE", True)
+    r = client.post("/tools/register", json={**body, "name": "t2"})
+    assert r.status_code == 401
+
+
+# ─── Replay protection ────────────────────────────────────────────────────────
+
+def test_same_tx_hash_cannot_buy_two_executions(client, echo_tool, collaborators, fake_ledger):
+    first = client.post("/tools/echo", json={}, headers={"X-Payment-Tx": TX})
+    assert first.status_code == 200
+    assert first.json()["escrowReceipt"]["paymentKey"] == f"x402:{TX}"
+
+    replay = client.post("/tools/echo", json={}, headers={"X-Payment-Tx": TX.upper().replace("0X", "0x")})
+    assert replay.status_code == 409
+    assert replay.json()["paymentKey"] == f"x402:{TX}"          # case-normalised key
+    assert len(collaborators["execute"].calls) == 1              # tool ran once
+    assert len(collaborators["release"].calls) == 1              # escrow released once
+
+
+def test_replay_is_checked_before_execution_even_on_other_tool(client, echo_tool, collaborators, clean_registry):
+    clean_registry.dynamic_routes["/tools/other"] = dict(clean_registry.dynamic_routes["/tools/echo"])
+    clean_registry.registered_proxies["other"] = dict(clean_registry.registered_proxies["echo"])
+    assert client.post("/tools/echo", json={}, headers={"X-Payment-Tx": TX}).status_code == 200
+    assert client.post("/tools/other", json={}, headers={"X-Payment-Tx": TX}).status_code == 409
+    assert len(collaborators["execute"].calls) == 1
+
+
+def test_nitrolite_state_cannot_be_replayed(client, echo_tool, collaborators, monkeypatch):
+    monkeypatch.setattr(tools_router, "verify_nitrolite_proof", lambda **kw: {
+        "payer": PAYER_ADDR, "provider": PROVIDER_ADDR, "appSessionId": "0xsess", "stateVersion": 7, "amount": "500000",
+    })
+    headers = {"X-Payment-Method": "nitrolite", "X-Nitrolite-Proof": "ok", "X-Nitrolite-From": PAYER_ADDR}
+    assert client.post("/tools/echo", json={}, headers=headers).status_code == 200
+    r = client.post("/tools/echo", json={}, headers=headers)
+    assert r.status_code == 409
+    assert r.json()["paymentKey"] == "nitrolite:0xsess:7"
+
+
+# ─── Receipts endpoint ────────────────────────────────────────────────────────
+
+def test_receipt_is_retrievable_after_call(client, echo_tool, collaborators):
+    client.post("/tools/echo", json={}, headers={"X-Payment-Tx": TX})
+    r = client.get(f"/receipts/x402:{TX}")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "delivered"
+    assert body["tool_name"] == "echo"
+    assert body["payer"] == PAYER_ADDR
+    assert body["settlement"]["status"] == "released"
+
+
+def test_unknown_receipt_is_404(client):
+    assert client.get("/receipts/x402:0xnothing").status_code == 404
+
+
+# ─── Spend cap ────────────────────────────────────────────────────────────────
+
+def test_spend_cap_refunds_instead_of_executing(client, echo_tool, collaborators, monkeypatch, fake_spend):
+    monkeypatch.setattr(settings, "DAILY_SPEND_CAP_UNITS", 700_000)    # 0.7 USDC/day; tool costs 0.5
+
+    ok = client.post("/tools/echo", json={}, headers={"X-Payment-Tx": TX})
+    assert ok.status_code == 200
+
+    tx2 = "0x" + "ef" * 32
+    capped = client.post("/tools/echo", json={}, headers={"X-Payment-Tx": tx2})
+    assert capped.status_code == 429
+    body = capped.json()
+    assert "spend cap" in body["error"]
+    assert body["escrowReceipt"]["escrowRelease"]["status"] == "refunded"
+    assert len(collaborators["execute"].calls) == 1               # second call never ran the tool
+    (args, _) = collaborators["refund"].calls[-1]
+    assert args == (tx2, PAYER_ADDR, 500_000)
+
+    # The refunded payment is recorded with the reason, and did not consume budget.
+    receipt = client.get(f"/receipts/x402:{tx2}").json()
+    assert receipt["status"] == "failed"
+    assert receipt["settlement"]["reason"] == "spend-cap"
+
+
+def test_failed_tool_refund_gives_budget_back(client, echo_tool, collaborators, monkeypatch, fake_spend):
+    monkeypatch.setattr(settings, "DAILY_SPEND_CAP_UNITS", 500_000)    # exactly one call per day
+    collaborators["execute"].error = RuntimeError("boom")
+    assert client.post("/tools/echo", json={}, headers={"X-Payment-Tx": TX}).status_code == 502   # refunded
+
+    collaborators["execute"].error = None
+    tx2 = "0x" + "ef" * 32
+    assert client.post("/tools/echo", json={}, headers={"X-Payment-Tx": tx2}).status_code == 200  # budget was released

@@ -367,6 +367,12 @@
     font-size: 1.1em;
 }
 
+.escrow-release-status.status-pending {
+    background: rgba(100, 181, 246, 0.1);
+    color: #64b5f6;
+    border-left: 3px solid #64b5f6;
+}
+
 .escrow-release-status.status-released {
     background: rgba(76, 175, 80, 0.1);
     color: #66bb6a;

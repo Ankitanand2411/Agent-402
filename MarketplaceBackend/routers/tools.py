@@ -2,6 +2,7 @@
 /tools/* endpoints + payment middleware (x402 and Nitrolite).
 Replaces the tools-related routes and the /tools middleware in market.js.
 """
+import asyncio
 import base64
 import json
 import logging
@@ -10,13 +11,16 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 import database
 import registry
 from config import settings
 from models.tool import ToolCreate
+from services import payments_ledger as ledger
+from services import spend_caps
+from services.auth import require_admin, verify_provider_signature
 from services.escrow_service import refund_escrow, release_escrow
 from services.nitrolite_verifier import verify_nitrolite_proof
 from services.payment_verifier import verify_onchain_payment
@@ -144,13 +148,31 @@ async def tools_info():
 # ---------------------------------------------------------------------------
 
 @router.post("/tools/register")
-async def register_tool(body: ToolCreate):
+async def register_tool(body: ToolCreate, request: Request):
+    """
+    Submit a tool for approval. Registration is open by design (pending tools
+    are inert until an admin approves them), but a provider can prove control
+    of the payout wallet by sending `X-Provider-Signature`: an EIP-191 signature
+    of services.auth.registration_message(name, walletAddress). The signature is
+    verified whenever present and required when REQUIRE_PROVIDER_SIGNATURE is on.
+    """
     if not body.name or not body.price:
         return JSONResponse(status_code=400, content={"success": False, "error": "Missing required fields: name, price"})
     if body.type == "proxy" and not body.targetUrl:
         return JSONResponse(status_code=400, content={"success": False, "error": "Proxy tools require targetUrl"})
     if body.type == "code" and not body.code:
         return JSONResponse(status_code=400, content={"success": False, "error": "Code tools require code"})
+
+    signature = request.headers.get("x-provider-signature")
+    provider_verified = False
+    if signature:
+        if not body.walletAddress:
+            return JSONResponse(status_code=400, content={"success": False, "error": "walletAddress is required to verify a provider signature"})
+        if not verify_provider_signature(body.name, body.walletAddress, signature):
+            return JSONResponse(status_code=401, content={"success": False, "error": "Provider signature does not match walletAddress"})
+        provider_verified = True
+    elif settings.REQUIRE_PROVIDER_SIGNATURE:
+        return JSONResponse(status_code=401, content={"success": False, "error": "X-Provider-Signature from the payout wallet is required"})
 
     existing = await database.tools_collection.find_one({"name": body.name})
     if existing:
@@ -159,6 +181,7 @@ async def register_tool(body: ToolCreate):
     doc = body.model_dump()
     doc["trusted"] = False
     doc["status"] = "pending"
+    doc["providerVerified"] = provider_verified
     doc["createdAt"] = datetime.now(timezone.utc)
 
     await database.tools_collection.insert_one(doc)
@@ -180,8 +203,9 @@ async def register_tool(body: ToolCreate):
 # POST /tools/{name}/approve
 # ---------------------------------------------------------------------------
 
-@router.post("/tools/{name}/approve")
+@router.post("/tools/{name}/approve", dependencies=[Depends(require_admin)])
 async def approve_tool(name: str):
+    """Admin only: approving makes the tool callable (and, for code tools, executable on this server)."""
     tool = await database.tools_collection.find_one({"name": name})
     if not tool:
         return JSONResponse(status_code=404, content={"success": False, "error": "Tool not found"})
@@ -230,6 +254,83 @@ async def approve_tool(name: str):
 
 
 # ---------------------------------------------------------------------------
+# Settlement (release / refund) — runs off the request path by default
+# ---------------------------------------------------------------------------
+
+# Strong references to in-flight settlement tasks. asyncio only keeps weak
+# references to tasks, so without this set a task could be garbage-collected
+# mid-flight. main.py drains it on shutdown; tests drain it for determinism.
+_settlement_tasks: set[asyncio.Task] = set()
+
+
+async def _settle(payment_key: str, tool_success: bool, tx_hash: str, provider: str, payer: str, amount: int) -> dict:
+    """Release to the provider on success, refund the payer on failure. Records the outcome in the ledger."""
+    try:
+        if tool_success:
+            escrow_info = await release_escrow(tx_hash, provider, amount)
+        else:
+            escrow_info = await refund_escrow(tx_hash, payer, amount)
+            if settings.DAILY_SPEND_CAP_UNITS > 0 and payer:
+                await spend_caps.release(payer, amount)  # a refunded payment does not count against the cap
+    except Exception as e:
+        logger.warning(f"[x402] Escrow operation failed for {payment_key}: {e}")
+        escrow_info = {"status": "release-failed" if tool_success else "refund-failed", "error": str(e)}
+    try:
+        await ledger.record_settlement(payment_key, escrow_info)
+    except Exception as e:  # ledger failure must not hide the settlement result
+        logger.error(f"[Ledger] Could not record settlement for {payment_key}: {e}")
+    return escrow_info
+
+
+def _schedule_settlement(*args) -> None:
+    task = asyncio.create_task(_settle(*args))
+    _settlement_tasks.add(task)
+    task.add_done_callback(_settlement_tasks.discard)
+
+
+async def drain_settlements(timeout: float | None = None) -> None:
+    """Wait for in-flight settlements (used on shutdown and in tests)."""
+    if not _settlement_tasks:
+        return
+    await asyncio.wait(set(_settlement_tasks), timeout=timeout)
+
+
+async def _start_settlement(payment_key: str, tool_success: bool, tx_hash: str, provider: str, payer: str, amount: int) -> dict:
+    """
+    Kick off release (tool succeeded) or refund (tool failed) and return the
+    settlement record to put in the receipt.
+
+      no escrow key configured -> {"status": "no-key"} (nothing to settle)
+      SETTLEMENT_MODE == "sync" -> awaits the on-chain tx; final status
+      otherwise                 -> schedules a background task; "pending" +
+                                   the /receipts URL the client can poll
+    """
+    if not (settings.ESCROW_PRIVATE_KEY and settings.ESCROW_CONTRACT_ADDRESS):
+        return {"status": "no-key", "note": "ESCROW_PRIVATE_KEY not set"}
+    if settings.SETTLEMENT_MODE == "sync":
+        return await _settle(payment_key, tool_success, tx_hash, provider, payer, amount)
+    _schedule_settlement(payment_key, tool_success, tx_hash, provider, payer, amount)
+    return {
+        "status": "pending",
+        "action": "release" if tool_success else "refund",
+        "receiptId": payment_key,
+        "poll": f"/receipts/{payment_key}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# GET /receipts/{payment_key} — settlement status for a paid call
+# ---------------------------------------------------------------------------
+
+@router.get("/receipts/{payment_key:path}")
+async def get_receipt(payment_key: str):
+    doc = await ledger.get_receipt(payment_key)
+    if not doc:
+        return JSONResponse(status_code=404, content={"success": False, "error": "Receipt not found"})
+    return doc
+
+
+# ---------------------------------------------------------------------------
 # POST /tools/{tool_name} — payment gate + execution
 # ---------------------------------------------------------------------------
 
@@ -257,10 +358,14 @@ async def call_tool(tool_name: str, request: Request):
     x_nitrolite_proof = request.headers.get("x-nitrolite-proof")
     x_nitrolite_from = request.headers.get("x-nitrolite-from")
 
+    is_nitrolite = x_payment_method == "nitrolite"
     server_receipt: dict = {}
+    payment_key = ""
+    payer_addr = ""
+    paid_amount = price_units
 
     # ---- Nitrolite off-chain payment ----
-    if x_payment_method == "nitrolite":
+    if is_nitrolite:
         try:
             nitrolite = verify_nitrolite_proof(
                 encoded_proof=x_nitrolite_proof,
@@ -270,7 +375,10 @@ async def call_tool(tool_name: str, request: Request):
                 expected_payer=x_nitrolite_from,
             )
             server_receipt = _build_nitrolite_receipt(tool_name, provider_wallet, price_units, nitrolite)
-            logger.info(f"[Nitrolite] ✓ Verified off-chain payment for {tool_name} from {nitrolite['payer']}")
+            payer_addr = nitrolite.get("payer") or ""
+            paid_amount = int(nitrolite.get("amount") or price_units)
+            payment_key = ledger.nitrolite_key(nitrolite.get("appSessionId"), nitrolite.get("stateVersion"), x_nitrolite_proof)
+            logger.info(f"[Nitrolite] ✓ Verified off-chain payment for {tool_name} from {payer_addr}")
         except Exception as e:
             logger.error(f"[Nitrolite] Verification failed: {e}")
             return JSONResponse(status_code=403, content={"error": "Nitrolite payment verification failed", "details": str(e)})
@@ -294,7 +402,6 @@ async def call_tool(tool_name: str, request: Request):
             }]
         })
     else:
-        # Verify x402 on-chain payment
         if not escrow_contract_addr:
             return JSONResponse(status_code=500, content={"error": "Escrow contract not configured"})
 
@@ -315,72 +422,94 @@ async def call_tool(tool_name: str, request: Request):
 
         try:
             verified = await verify_onchain_payment(tx_hash, escrow_contract_addr, price_units)
-            from_addr = verified["from_addr"]
-            transfer_amount = verified["transfer_amount"]
-            logger.info(f"[x402] ✓ Payment verified: {transfer_amount} units from {from_addr}")
-
-            server_receipt = {
-                "verified": True,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "txHash": tx_hash,
-                "payTo": escrow_contract_addr,
-                "toolProvider": provider_wallet,
-                "amount": str(price_units),
-                "asset": TOKEN_CONTRACT_ADDR,
-                "chain": "sepolia-testnet",
-                "chainId": SEPOLIA_CHAIN_ID,
-                "toolName": tool_name,
-                "verifiedBy": "x402-bnb-escrow",
-                "payer": from_addr,
-                "transferAmount": str(transfer_amount),
-            }
         except ValueError as e:
             return JSONResponse(status_code=400 if "not found" in str(e).lower() else 403, content={"error": str(e)})
         except Exception as e:
             return JSONResponse(status_code=502, content={"error": "Payment Verification Failed", "details": str(e)})
+
+        payer_addr = verified["from_addr"]
+        paid_amount = verified["transfer_amount"]
+        payment_key = ledger.x402_key(tx_hash)
+        logger.info(f"[x402] ✓ Payment verified: {paid_amount} units from {payer_addr}")
+
+        server_receipt = {
+            "verified": True,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "txHash": tx_hash,
+            "payTo": escrow_contract_addr,
+            "toolProvider": provider_wallet,
+            "amount": str(price_units),
+            "asset": TOKEN_CONTRACT_ADDR,
+            "chain": "sepolia-testnet",
+            "chainId": SEPOLIA_CHAIN_ID,
+            "toolName": tool_name,
+            "verifiedBy": "x402-bnb-escrow",
+            "payer": payer_addr,
+            "transferAmount": str(paid_amount),
+        }
+
+    # ---- Replay protection: claim the payment before doing any work ----
+    try:
+        await ledger.claim_payment(
+            payment_key,
+            rail="nitrolite" if is_nitrolite else "x402",
+            tool_name=tool_name,
+            payer=payer_addr,
+            provider=provider_wallet,
+            amount_units=paid_amount,
+        )
+    except ledger.PaymentAlreadyUsed:
+        logger.warning(f"[Ledger] Replay rejected for {payment_key}")
+        return JSONResponse(status_code=409, content={
+            "success": False,
+            "error": "This payment has already been used for a tool call",
+            "paymentKey": payment_key,
+        })
+    server_receipt["paymentKey"] = payment_key
+
+    # ---- Guardrail: per-wallet daily spend cap (x402 only — on-chain funds can be refunded) ----
+    cap = settings.DAILY_SPEND_CAP_UNITS
+    if cap > 0 and not is_nitrolite and payer_addr:
+        if not await spend_caps.try_reserve(payer_addr, paid_amount, cap):
+            logger.warning(f"[Guardrail] Daily spend cap reached for {payer_addr}; refunding {paid_amount}")
+            server_receipt["escrowRelease"] = await _start_settlement(
+                payment_key, False, server_receipt.get("txHash", ""), provider_wallet, payer_addr, paid_amount
+            )
+            await ledger.record_delivery(payment_key, False, {**server_receipt["escrowRelease"], "reason": "spend-cap"})
+            return JSONResponse(status_code=429, content={
+                "success": False,
+                "error": f"Daily spend cap of {cap} units reached for wallet {payer_addr}; payment is being refunded",
+                "escrowReceipt": server_receipt,
+            }, headers={"X-Payment-Receipt": json.dumps(server_receipt)})
 
     # ---- Execute the tool ----
     body = await request.json()
 
     try:
         if tool_config.get("type") == "code":
-            result = await execute_code_tool(
-                tool_name,
-                body,
-                trusted=tool_config.get("trusted", False),
-            )
+            result = await execute_code_tool(tool_name, body, trusted=tool_config.get("trusted", False))
         else:
             result = await execute_proxy_tool(tool_config.get("targetUrl", ""), body)
-
         tool_success = result.get("success", True)
     except Exception as e:
         logger.error(f"[Execution] Error calling {tool_name}: {e}")
         tool_success = False
         result = {"success": False, "result": "Tool execution failed", "error": str(e)}
 
-    # ---- Escrow release / refund ----
-    escrow_key = settings.ESCROW_PRIVATE_KEY
-    if x_payment_method != "nitrolite" and escrow_key and escrow_contract_addr:
-        tx_hash_for_escrow = server_receipt.get("txHash", "")
-        try:
-            if tool_success:
-                provider = server_receipt.get("toolProvider") or provider_wallet
-                amount_val = int(server_receipt.get("transferAmount", price_units))
-                escrow_info = await release_escrow(tx_hash_for_escrow, provider, amount_val)
-            else:
-                payer = server_receipt.get("payer", "")
-                amount_val = int(server_receipt.get("transferAmount", price_units))
-                escrow_info = await refund_escrow(tx_hash_for_escrow, payer, amount_val)
-            server_receipt["escrowRelease"] = escrow_info
-        except Exception as e:
-            logger.warning(f"[x402] Escrow operation failed: {e}")
-            server_receipt["escrowRelease"] = {"status": "release-failed", "error": str(e)}
-    elif not escrow_key:
-        server_receipt["escrowRelease"] = {"status": "no-key", "note": "ESCROW_PRIVATE_KEY not set"}
+    # ---- Settlement ----
+    if is_nitrolite:
+        settlement = {"status": "not-applicable", "note": "off-chain rail settles in the state channel"}
+    else:
+        settlement = await _start_settlement(
+            payment_key, tool_success, server_receipt.get("txHash", ""), provider_wallet, payer_addr, paid_amount
+        )
+        server_receipt["escrowRelease"] = settlement
+
+    await ledger.record_delivery(payment_key, tool_success, settlement)
 
     # Attach receipt to response body and header
     if isinstance(result, dict):
-        if x_payment_method == "nitrolite":
+        if is_nitrolite:
             result["nitroliteReceipt"] = {**server_receipt, "deliveryStatus": 200 if tool_success else 502}
         else:
             result["escrowReceipt"] = server_receipt
