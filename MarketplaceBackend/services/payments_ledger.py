@@ -84,6 +84,7 @@ async def record_delivery(payment_key: str, tool_success: bool, settlement: dict
         {"$set": {
             "status": "delivered" if tool_success else "failed",
             "settlement": settlement,
+            "delivered_at": _now(),
             "updated_at": _now(),
         }},
     )
@@ -92,8 +93,14 @@ async def record_delivery(payment_key: str, tool_success: bool, settlement: dict
 async def record_settlement(payment_key: str, settlement: dict) -> None:
     await _collection().update_one(
         {"_id": payment_key},
-        {"$set": {"settlement": settlement, "updated_at": _now()}},
+        {"$set": {"settlement": settlement, "settled_at": _now(), "updated_at": _now()}},
     )
+
+
+async def recent_receipts(limit: int = 200) -> list[dict]:
+    """Most recent ledger documents, for settlement statistics."""
+    cursor = _collection().find({}).sort("created_at", -1).limit(limit)
+    return [dict(d) for d in await cursor.to_list(limit)]
 
 
 async def get_receipt(payment_key: str) -> dict | None:
@@ -102,7 +109,7 @@ async def get_receipt(payment_key: str) -> dict | None:
         return None
     doc = dict(doc)
     doc["paymentKey"] = doc.pop("_id")
-    for k in ("created_at", "updated_at"):
+    for k in ("created_at", "updated_at", "delivered_at", "settled_at"):
         if isinstance(doc.get(k), datetime):
             doc[k] = doc[k].isoformat()
     return doc

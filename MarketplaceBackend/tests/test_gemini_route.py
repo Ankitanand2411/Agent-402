@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 import database
 from config import settings
 from routers import gemini as gemini_module
+from services import telemetry as tm
 from services import tool_retrieval as tr
 from tests.test_tool_retrieval import TOOLS, BagOfWordsEmbedder, FakeEmbeddingsCollection
 
@@ -56,6 +57,9 @@ def test_chat_declares_only_relevant_tools_and_reports_usage(env):
     assert rec["declared"][0] == "get_weather" and len(rec["declared"]) == 2
     assert body["functionCalls"] == [{"name": "get_weather", "args": {"city": "Delhi"}}]
     assert body["usage"] == {"promptTokens": 321, "candidatesTokens": 12, "totalTokens": 333}
+
+    g = tm.telemetry.snapshot()["gemini"]
+    assert g["turns"] >= 1 and g["prompt_tokens"] >= 321 and g["avg_tools_declared"] is not None
 
 
 def test_tool_result_turn_keeps_the_tool_in_use(env):

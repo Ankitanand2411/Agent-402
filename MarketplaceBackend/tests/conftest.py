@@ -108,6 +108,25 @@ class FakeLedgerCollection:
         doc = self.docs.get(query["_id"])
         return copy.deepcopy(doc) if doc is not None else None
 
+    def find(self, query: dict):
+        return _LedgerCursor(list(self.docs.values()))
+
+
+class _LedgerCursor:
+    def __init__(self, docs):
+        self._docs = docs
+
+    def sort(self, key, direction):
+        self._docs = sorted(self._docs, key=lambda d: d.get(key), reverse=(direction == -1))
+        return self
+
+    def limit(self, n):
+        self._docs = self._docs[:n]
+        return self
+
+    async def to_list(self, _n=None):
+        return [copy.deepcopy(d) for d in self._docs]
+
 
 class FakeSpendCollection:
     """
