@@ -5,6 +5,7 @@ Replaces the POST /gemini/chat handler in market.js.
 import asyncio
 import logging
 import re
+import time
 from typing import Any
 
 from fastapi import APIRouter
@@ -15,6 +16,7 @@ from google.genai import types as genai_types
 from config import settings
 from models.tool import GeminiChatRequest
 from services import tool_retrieval
+from services.telemetry import telemetry
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -219,6 +221,7 @@ async def gemini_chat(body: GeminiChatRequest):
     selected_tools = await tool_retrieval.select_for_request(sanitized_tools, body.history, body.message)
     declarations = _build_tool_declarations(selected_tools) if selected_tools else []
 
+    started = time.perf_counter()
     try:
         client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
@@ -267,6 +270,11 @@ async def gemini_chat(body: GeminiChatRequest):
             pass
 
         usage = _usage_of(response)
+        telemetry.record_gemini_turn(
+            latency_ms=(time.perf_counter() - started) * 1000, usage=usage,
+            tools_declared=len(selected_tools), tools_available=len(sanitized_tools),
+            function_calls=len(function_calls),
+        )
         logger.info(
             "[Gemini] tools declared=%d/%d prompt_tokens=%s total_tokens=%s",
             len(selected_tools), len(sanitized_tools), usage.get("promptTokens"), usage.get("totalTokens"),
@@ -282,6 +290,10 @@ async def gemini_chat(body: GeminiChatRequest):
         }
 
     except Exception as e:
+        telemetry.record_gemini_turn(
+            latency_ms=(time.perf_counter() - started) * 1000, usage={},
+            tools_declared=len(selected_tools), tools_available=len(sanitized_tools), function_calls=0, error=True,
+        )
         logger.exception("Gemini API Error")
         return JSONResponse(
             status_code=500,

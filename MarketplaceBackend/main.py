@@ -4,6 +4,7 @@ Replaces market.js. Run with:
   venv/bin/uvicorn main:app --host 0.0.0.0 --port 3000 --reload
 """
 import logging
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -11,9 +12,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import database
 from config import settings
-from routers import gemini, info, tools
+from routers import gemini, info, metrics, tools
 from routers.tools import load_tools
 from services import escrow_service
+from services.telemetry import telemetry
 
 logging.basicConfig(
     level=logging.INFO,
@@ -80,10 +82,16 @@ app.add_middleware(
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     logger.debug(f"[DEBUG] Incoming Request: {request.method} {request.url.path}")
-    return await call_next(request)
+    started = time.perf_counter()
+    response = await call_next(request)
+    latency_ms = (time.perf_counter() - started) * 1000
+    route = getattr(request.scope.get("route"), "path", request.url.path)   # template, known after routing
+    telemetry.record_request(route=route, method=request.method, status=response.status_code, latency_ms=latency_ms)
+    return response
 
 
 # Register routers
 app.include_router(info.router)
 app.include_router(gemini.router)
 app.include_router(tools.router)
+app.include_router(metrics.router)

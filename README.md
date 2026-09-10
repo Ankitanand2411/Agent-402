@@ -305,6 +305,27 @@ MIT
 
 ---
 
+## Numbers
+
+`GET /metrics` (admin key) returns:
+
+- **http**: per route template — count, p50/p95/max latency, 5xx count (in-memory, per process).
+- **gemini**: turns, p50/p95 latency, prompt/candidate tokens, `avg_tools_declared` vs `avg_tools_available` and their ratio (the tool-retrieval saving), function calls per turn.
+- **settlement**: from the payment ledger's timestamps, so it survives restarts — `delivery` (time until the tool result was ready) vs `settlement` (time until the on-chain release/refund confirmed), and `request_path_saving_p50_ms`, the difference between their medians. In sync mode the caller waited for settlement; in async mode only for delivery. That number is the latency the async change removed.
+
+```bash
+curl -H "Authorization: Bearer $ADMIN_API_KEY" https://<backend>/metrics | jq '.gemini, .settlement'
+```
+
+<!-- Paste results here, e.g.:
+| Metric | Value |
+|---|---|
+| Prompt tokens per agent turn, k=0 vs k=8 at N tools | … → … |
+| Gemini turn p95 latency | … ms |
+| Tool delivery p50 vs on-chain settlement p50 | … ms vs … ms (saving … ms per call) |
+| POST /tools/{tool_name} p95 (async settlement) | … ms |
+-->
+
 ## Tests
 
 ```bash
@@ -329,7 +350,8 @@ No credentials or network are needed: MongoDB, the Sepolia RPC, Gemini and escro
 | `services/auth` | Admin key via header or bearer, prefix/wrong key rejected, fail-closed when unset; EIP-191 signature accepted only from the payout wallet and only for the named tool |
 | async settlement | Response returns while the on-chain call is still blocked; receipt shows `pending` → `released`/`refunded`/`release-failed` after the task completes; shutdown drain |
 | `services/tool_retrieval` | Top-k by similarity with a bag-of-words fake embedder, must-include for tools already used, fail-open on disabled/small catalog/embedding failure/no key/blank query, embed-once caching, re-embed only changed descriptions, persistence and reload across index instances, foreign-model vectors ignored, query-text extraction rules |
-| `/gemini/chat` | Fake SDK client: retrieval narrows declarations, tool-result turns keep the tool in use, retrieval disabled declares all, usage reported |
+| `/gemini/chat` | Fake SDK client: retrieval narrows declarations, tool-result turns keep the tool in use, retrieval disabled declares all, usage reported and recorded |
+| `services/telemetry` | Percentiles, Gemini turn aggregates (tokens, declaration ratio, errors), route aggregates, settlement statistics from ledger timestamps (delivery vs settlement medians, per rail/status), ledger timestamps written on delivery/settlement, admin-only `/metrics`, ledger failure does not break the endpoint |
 
 CI runs the same two commands on every push/PR touching `MarketplaceBackend/` (`.github/workflows/backend-ci.yml`).
 
