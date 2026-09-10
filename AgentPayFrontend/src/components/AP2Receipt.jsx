@@ -1,5 +1,45 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import env from '../config/env';
 import './AP2Receipt.css';
+
+// Settlement now happens off the request path: the server answers with
+// escrowRelease.status === 'pending' and a /receipts/{id} URL. Poll it until
+// the on-chain release/refund is confirmed (or give up after ~2 minutes).
+const SETTLEMENT_POLL_MS = 4000;
+const SETTLEMENT_POLL_MAX = 30;
+
+const useLiveSettlement = (initial) => {
+    const [live, setLive] = useState(initial);
+
+    useEffect(() => { setLive(initial); }, [initial]);
+
+    useEffect(() => {
+        if (!live || live.status !== 'pending' || !live.receiptId) return undefined;
+        let attempts = 0;
+        let cancelled = false;
+        const url = `${env.MARKETPLACE_URL}${live.poll || `/receipts/${live.receiptId}`}`;
+
+        const tick = async () => {
+            attempts += 1;
+            try {
+                const res = await fetch(url);
+                if (res.ok) {
+                    const data = await res.json();
+                    const settlement = data?.settlement;
+                    if (settlement && settlement.status !== 'pending' && !cancelled) {
+                        setLive({ ...live, ...settlement });
+                        return;
+                    }
+                }
+            } catch (e) { /* transient; keep polling */ }
+            if (!cancelled && attempts < SETTLEMENT_POLL_MAX) timer = setTimeout(tick, SETTLEMENT_POLL_MS);
+        };
+        let timer = setTimeout(tick, SETTLEMENT_POLL_MS);
+        return () => { cancelled = true; clearTimeout(timer); };
+    }, [live]);
+
+    return live;
+};
 
 const PHASE_CONFIG = {
     intent: { label: 'Intent', description: '402 Challenge', protocol: 'ap2', icon: '📡' },
@@ -114,7 +154,8 @@ const SettlementDetails = ({ phase }) => (
 );
 
 const DeliveryDetails = ({ phase, receipt }) => {
-    const escrowRelease = receipt?.escrowReceipt?.escrowRelease || receipt?.serverAttestation?.escrowRelease;
+    const initialRelease = receipt?.escrowReceipt?.escrowRelease || receipt?.serverAttestation?.escrowRelease;
+    const escrowRelease = useLiveSettlement(initialRelease);
 
     return (
         <div className="ap2-phase-details">
@@ -129,6 +170,12 @@ const DeliveryDetails = ({ phase, receipt }) => {
                     </div>
 
                     <div className={`escrow-release-status status-${escrowRelease.status}`}>
+                        {escrowRelease.status === 'pending' && (
+                            <>
+                                <span className="status-icon">⏳</span>
+                                <span>{escrowRelease.action === 'refund' ? 'Refund' : 'Release'} settling on-chain…</span>
+                            </>
+                        )}
                         {escrowRelease.status === 'released' && (
                             <>
                                 <span className="status-icon">✓</span>

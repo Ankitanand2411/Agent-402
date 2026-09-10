@@ -199,6 +199,12 @@ MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/
 SEPOLIA_RPC=https://ethereum-sepolia.publicnode.com
 ESCROW_CONTRACT_ADDRESS=0x14b848bE61C159908C0F1127C53Aa70dD0F2cBed
 ESCROW_PRIVATE_KEY=your_escrow_admin_private_key
+
+# Security / operations (see "Hardening" below)
+ADMIN_API_KEY=long-random-string        # required for POST /tools/{name}/approve; endpoint returns 503 if unset
+REQUIRE_PROVIDER_SIGNATURE=false        # true = /tools/register needs an EIP-191 signature from the payout wallet
+SETTLEMENT_MODE=async                   # async = respond first, settle escrow in background; sync = original behaviour
+DAILY_SPEND_CAP_UNITS=0                 # per-wallet daily cap in USDC atomic units (0 = off); over-cap payments are refunded
 GROQ_API_KEY=your_groq_api_key
 ADZUNA_APP_ID=your_adzuna_id
 ADZUNA_APP_KEY=your_adzuna_key
@@ -315,13 +321,26 @@ No credentials or network are needed: MongoDB, the Sepolia RPC, Gemini and escro
 | `services/pricing` | Exact decimal → atomic-unit conversion (`0.0157` → `15700`, where float math gave `15699`); rejects unrepresentable prices |
 | `routers/tools` | 402 challenge contents; verify → execute → release; failed tool → 502 + refund; verification failures never execute the tool; Nitrolite 403; register / approve / list behaviour with a fake collection |
 | `routers/gemini` | Tool name and parameter-schema sanitisation before anything reaches Gemini |
+| `services/payments_ledger` | Claim-then-replay raises; receipt lifecycle processing → delivered → settled |
+| `services/spend_caps` | Accumulation up to the cap, single over-cap rejection, refund releases budget, per-wallet isolation, ten concurrent reservations against one cap admit exactly the affordable number |
+| `services/auth` | Admin key via header or bearer, prefix/wrong key rejected, fail-closed when unset; EIP-191 signature accepted only from the payout wallet and only for the named tool |
+| async settlement | Response returns while the on-chain call is still blocked; receipt shows `pending` → `released`/`refunded`/`release-failed` after the task completes; shutdown drain |
 
 CI runs the same two commands on every push/PR touching `MarketplaceBackend/` (`.github/workflows/backend-ci.yml`).
 
+## Hardening
+
+| Concern | Mechanism | Response |
+|---|---|---|
+| Replay of a payment proof | Every verified payment is claimed in `payment_receipts` (`_id` = `x402:<tx>` or `nitrolite:<session>:<version>`) **before** the tool runs; the unique index makes a second claim fail | `409` with `paymentKey` |
+| Unauthenticated approval (would let anyone make code executable on the server) | `POST /tools/{name}/approve` requires `Authorization: Bearer $ADMIN_API_KEY` (constant-time compare); fails closed | `401` / `503` if unset |
+| Provider identity | `POST /tools/register` accepts `X-Provider-Signature`, an EIP-191 signature of `Agent402 tool registration\ntool: <name>\nwallet: <addr>` by `walletAddress`; verified when present, required if `REQUIRE_PROVIDER_SIGNATURE=true`; stored as `providerVerified` | `401` on mismatch |
+| Settlement latency (~12 s on-chain wait inside the request) | `SETTLEMENT_MODE=async`: the response returns with `escrowRelease: {status: "pending", receiptId, poll}`; a tracked background task performs the release/refund and updates the ledger; shutdown drains in-flight tasks | `GET /receipts/{paymentKey}` |
+| Runaway agent / leaked worker key | `DAILY_SPEND_CAP_UNITS`: atomic `find_one_and_update` reservation per (wallet, UTC day); over-cap payments are refunded, never executed; refunds return budget | `429` with refund receipt |
+| Untrusted header data | Only the tx hash is read from `X-Payment`; payer and amount come from the on-chain receipt | — |
+
 ## Known limitations (next up)
 
-- `/tools/register` and `/tools/{name}/approve` have no authentication; an approved `code` tool runs on the server with the full environment. Fix: admin bearer token, provider API keys, real sandboxing.
-- A verified payment tx hash can be replayed for a second execution. Fix: `consumed_payments` collection with a unique index on `tx_hash`, inserted before execution.
-- Escrow release/refund is awaited inside the request (adds ~12 s). Fix: return the result with `settlement: pending` and settle from the existing serial worker; expose `GET /receipts/{id}`.
-- No per-agent spend caps. Fix: atomic check-and-increment against a daily cap.
-- Registry cache and nonce queue assume a single instance.
+- An approved `code` tool runs on the server with the full environment (the "sandbox" is a CJS shim, not isolation). Fix: run untrusted tools in a separate container or a WASM/isolate runtime with no env access.
+- Registry cache, in-memory escrow queue and settlement tasks assume a single instance. Fix: move the queue to a durable job store and reconcile `settlement.status == "pending"` receipts on startup.
+- Gemini tool declarations are built from the whole catalog on every turn. Fix: embed tool descriptions and declare only the top-k relevant tools (see plan, Phase 3a).

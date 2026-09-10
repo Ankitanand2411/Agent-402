@@ -41,9 +41,14 @@ async def lifespan(app: FastAPI):
         f"🔒 Escrow Contract: {settings.ESCROW_CONTRACT_ADDRESS or 'NOT SET — deploy via Remix and set ESCROW_CONTRACT_ADDRESS in .env'}"
     )
 
+    if not settings.ADMIN_API_KEY:
+        logger.warning("ADMIN_API_KEY is not set — /tools/{name}/approve will refuse all requests (503)")
+    logger.info(f"⚙️  Settlement mode: {settings.SETTLEMENT_MODE}; daily spend cap: {settings.DAILY_SPEND_CAP_UNITS or 'off'}")
+
     yield  # Server runs here
 
-    # Shutdown
+    # Shutdown: let in-flight escrow releases/refunds finish before the worker stops
+    await tools.drain_settlements(timeout=60)
     await escrow_service.stop_worker()
     await database.close_db()
 
