@@ -40,6 +40,15 @@ class Settings(BaseSettings):
     TOOL_EMBED_MODEL: str = "gemini-embedding-001"
     TOOL_EMBED_DIMENSIONS: int = 768
 
+    # --- MCP server ---
+    # Exposes approved marketplace tools to any MCP client at /mcp (Streamable
+    # HTTP). Tool calls are forwarded to this same service's /tools/{name}
+    # endpoint so the x402 payment gate, ledger, spend cap and settlement all
+    # apply unchanged.
+    MCP_ENABLED: bool = True
+    SELF_BASE_URL: str = ""           # defaults to http://127.0.0.1:{PORT}
+    MCP_ALLOWED_HOSTS: str = ""       # comma-separated; when set, enables DNS-rebinding protection for these hosts
+
     # --- Guardrails ---
     # Maximum a single payer wallet may spend per UTC day, in USDC atomic units.
     # 0 disables the cap. Payments above the cap are refunded, not executed.
