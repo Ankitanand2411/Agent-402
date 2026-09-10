@@ -1,6 +1,6 @@
 """
 Escrow release/refund service with a serial asyncio queue.
-Replaces the NonceQueue class in market.js — guarantees no nonce collisions.
+A single worker processes escrow transactions serially so the owner key never issues two transactions with the same nonce.
 """
 import asyncio
 import logging

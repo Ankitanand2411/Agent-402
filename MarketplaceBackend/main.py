@@ -1,7 +1,6 @@
 """
 main.py — FastAPI application entry point.
-Replaces market.js. Run with:
-  venv/bin/uvicorn main:app --host 0.0.0.0 --port 3000 --reload
+  uvicorn main:app --host 0.0.0.0 --port 3000 --reload
 """
 import logging
 import time
@@ -27,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup/shutdown lifecycle — replaces top-level awaits in market.js."""
+    """Startup/shutdown lifecycle."""
     # Connect MongoDB
     await database.connect_db()
 
@@ -70,15 +69,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — same origins as market.js
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5174",
-        "http://localhost:5173",
-        "https://agent402-skale.vercel.app",
-        "https://agent402-goodvibes.vercel.app",
-    ],
+    allow_origins=[o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -86,7 +79,7 @@ app.add_middleware(
 )
 
 
-# Global request logger — mirrors the debug middleware in market.js
+# Request logging + timing
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     logger.debug(f"[DEBUG] Incoming Request: {request.method} {request.url.path}")

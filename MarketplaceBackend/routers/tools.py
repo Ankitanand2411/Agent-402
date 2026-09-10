@@ -1,13 +1,12 @@
 """
-/tools/* endpoints + payment middleware (x402 and Nitrolite).
-Replaces the tools-related routes and the /tools middleware in market.js.
+/tools/* endpoints: catalog, registration, approval, and the paid call path
+(payment gate → ledger claim → spend cap → execute → settle).
 """
 import asyncio
 import base64
 import json
 import logging
 import os
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -44,54 +43,22 @@ SEPOLIA_CHAIN_ID = settings.SEPOLIA_CHAIN_ID
 
 async def load_tools():
     """Load all approved tools from MongoDB into the in-memory registry."""
-    registry.dynamic_routes.clear()
-    registry.registered_proxies.clear()
-    registry.marketplace_tools.clear()
+    registry.clear()
+    docs = await database.tools_collection.find({"status": "approved"}).to_list(None)
+    for doc in docs:
+        _register_tool(doc)
+    logger.info(f"[Persistence] Loaded {len(docs)} approved tools from MongoDB.")
+    return registry.marketplace_view()
 
-    tools = await database.tools_collection.find({"status": "approved"}).to_list(None)
 
-    for tool in tools:
-        route_path = f"/tools/{tool['name']}"
-        registry.dynamic_routes[route_path] = {
-            "price": tool["price"],
-            "asset": "native",
-            "description": tool["description"],
-            "mimeType": "application/json",
-            "maxTimeoutSeconds": 300,
-            "walletAddress": tool.get("walletAddress", ""),
-        }
-
-        if tool.get("type") == "code":
-            code_path = USER_TOOLS_DIR / f"{tool['name']}.js"
-            code_path.write_text(normalize_tool_code(tool["name"], tool.get("code", "")), "utf-8")
-            registry.registered_proxies[tool["name"]] = {
-                "type": "code",
-                "codePath": str(code_path),
-                "walletAddress": tool.get("walletAddress", ""),
-                "trusted": tool.get("trusted", False),
-            }
-        else:
-            registry.registered_proxies[tool["name"]] = {
-                "type": "proxy",
-                "targetUrl": tool.get("targetUrl", ""),
-                "method": "POST",
-                "walletAddress": tool.get("walletAddress", ""),
-            }
-
-        tool_def = {
-            "name": tool["name"],
-            "description": re.sub(r"\s*COSTS:.*$", "", tool["description"], flags=re.IGNORECASE).strip(),
-            "price": tool["price"],
-            "parameters": tool.get("parameters"),
-        }
-        existing = next((i for i, t in enumerate(registry.marketplace_tools) if t["name"] == tool["name"]), -1)
-        if existing >= 0:
-            registry.marketplace_tools[existing] = tool_def
-        else:
-            registry.marketplace_tools.append(tool_def)
-
-    logger.info(f"[Persistence] Loaded {len(tools)} custom tools from MongoDB.")
-    return registry.marketplace_tools
+def _register_tool(doc: dict) -> dict:
+    """Register a tool; code tools have their source written to USER_TOOLS_DIR first."""
+    code_path = None
+    if doc.get("type") == "code":
+        path = USER_TOOLS_DIR / f"{doc['name']}.js"
+        path.write_text(normalize_tool_code(doc.get("code", "")), "utf-8")
+        code_path = str(path)
+    return registry.register(doc, code_path=code_path)
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +83,6 @@ def _build_nitrolite_receipt(tool_name: str, provider_wallet: str, price_units: 
         "amount": str(price_units),
         "asset": "usdc",
         "chain": "yellow-network",
-        "chainId": SEPOLIA_CHAIN_ID,
         "verifiedBy": "yellow-nitrolite",
         "payer": nitrolite.get("payer"),
         "provider": nitrolite.get("provider"),
@@ -132,15 +98,14 @@ def _build_nitrolite_receipt(tool_name: str, provider_wallet: str, price_units: 
 
 @router.get("/tools")
 async def list_tools():
-    logger.info("[Server] Fetching marketplace tools list")
-    if not registry.marketplace_tools:
+    if not registry.tools:
         await load_tools()
-    return registry.marketplace_tools
+    return registry.marketplace_view()
 
 
 @router.get("/tools/info")
 async def tools_info():
-    return registry.marketplace_tools
+    return registry.marketplace_view()
 
 
 # ---------------------------------------------------------------------------
@@ -213,41 +178,7 @@ async def approve_tool(name: str):
         return JSONResponse(status_code=400, content={"success": False, "error": "Tool already approved"})
 
     await database.tools_collection.update_one({"name": name}, {"$set": {"status": "approved"}})
-
-    # Hot-load into registry
-    route_path = f"/tools/{name}"
-    registry.dynamic_routes[route_path] = {
-        "price": tool["price"],
-        "asset": "native",
-        "description": tool["description"],
-        "mimeType": "application/json",
-        "maxTimeoutSeconds": 300,
-        "walletAddress": tool.get("walletAddress", ""),
-    }
-
-    if tool.get("type") == "code":
-        code_path = USER_TOOLS_DIR / f"{name}.js"
-        code_path.write_text(normalize_tool_code(name, tool.get("code", "")), "utf-8")
-        registry.registered_proxies[name] = {
-            "type": "code",
-            "codePath": str(code_path),
-            "walletAddress": tool.get("walletAddress", ""),
-            "trusted": tool.get("trusted", False),
-        }
-    else:
-        registry.registered_proxies[name] = {
-            "type": "proxy",
-            "targetUrl": tool.get("targetUrl", ""),
-            "method": "POST",
-            "walletAddress": tool.get("walletAddress", ""),
-        }
-
-    tool_def = {"name": name, "description": tool["description"], "price": tool["price"], "parameters": tool.get("parameters")}
-    existing = next((i for i, t in enumerate(registry.marketplace_tools) if t["name"] == name), -1)
-    if existing >= 0:
-        registry.marketplace_tools[existing] = tool_def
-    else:
-        registry.marketplace_tools.append(tool_def)
+    _register_tool({**tool, "status": "approved"})
 
     logger.info(f"[Approval] Approved and loaded tool: {name}")
     return {"success": True, "message": "Tool approved and live"}
@@ -336,17 +267,14 @@ async def get_receipt(payment_key: str):
 
 @router.post("/tools/{tool_name}")
 async def call_tool(tool_name: str, request: Request):
-    full_path = f"/tools/{tool_name}"
-    specific_route = registry.dynamic_routes.get(full_path)
-
-    if not specific_route:
+    tool_config = registry.get(tool_name)
+    if not tool_config:
         return JSONResponse(status_code=404, content={"success": False, "error": f"Tool '{tool_name}' not found"})
 
-    tool_config = registry.registered_proxies.get(tool_name, {})
     provider_wallet = tool_config.get("walletAddress") or settings.DEFAULT_EVM_WALLET or ""
     escrow_contract_addr = settings.ESCROW_CONTRACT_ADDRESS
     try:
-        price_units = _price_units(specific_route.get("price", "1"))
+        price_units = _price_units(tool_config.get("price", "1"))
     except ValueError as e:
         logger.error(f"[Pricing] Tool '{tool_name}' has an invalid price: {e}")
         return JSONResponse(status_code=500, content={"success": False, "error": f"Tool '{tool_name}' has a misconfigured price"})
@@ -443,7 +371,7 @@ async def call_tool(tool_name: str, request: Request):
             "chain": "sepolia-testnet",
             "chainId": SEPOLIA_CHAIN_ID,
             "toolName": tool_name,
-            "verifiedBy": "x402-bnb-escrow",
+            "verifiedBy": "x402-sepolia-escrow",
             "payer": payer_addr,
             "transferAmount": str(paid_amount),
         }

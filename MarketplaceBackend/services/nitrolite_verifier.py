@@ -1,7 +1,6 @@
 """
 Nitrolite off-chain payment verifier.
-Port of utils/nitroliteVerifier.js — uses eth-account for ECDSA sig recovery
-instead of ethers.recoverAddress.
+Uses eth-account for ECDSA signature recovery over the exact payload the client signed.
 """
 import base64
 import json
@@ -26,7 +25,7 @@ def _parse_json_message(raw: str, field_name: str) -> dict:
 
 
 def _recover_request_signer(request_message: dict) -> str:
-    """Recover signer from a Nitrolite RPC request — mirrors recoverRequestSigner() in JS."""
+    """Recover the signer of a Nitrolite RPC request."""
     req = request_message.get("req")
     if not req or not isinstance(req, list):
         raise ValueError("Nitrolite proof is missing req payload")
@@ -103,7 +102,6 @@ def verify_nitrolite_proof(
 ) -> dict:
     """
     Verify a Nitrolite off-chain payment proof.
-    Mirrors the JS verifyNitroliteProof() function exactly.
     Returns a receipt dict on success, raises ValueError on failure.
     """
     if not encoded_proof:

@@ -4,6 +4,9 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     MONGODB_URI: str = ""
+    # The Atlas URI has no database path; the original code fell back to "test",
+    # so that stays the default to keep pointing at the existing data.
+    MONGODB_DB_NAME: str = "test"
     SEPOLIA_RPC: str = "https://ethereum-sepolia.publicnode.com"
     ESCROW_CONTRACT_ADDRESS: str = ""
     ESCROW_PRIVATE_KEY: str = ""
@@ -12,6 +15,14 @@ class Settings(BaseSettings):
     ADZUNA_APP_KEY: str = ""
     GROQ_API_KEY: str = ""
     PORT: int = 3000
+
+    # --- CORS ---
+    # Comma-separated browser origins allowed to call the API. The Vercel entries
+    # are historical deployments; prune the ones no longer live.
+    ALLOWED_ORIGINS: str = (
+        "http://localhost:5174,http://localhost:5173,"
+        "https://agent402-skale.vercel.app,https://agent402-goodvibes.vercel.app"
+    )
 
     # --- Security ---
     # Bearer token required on admin endpoints (/tools/{name}/approve). Approval

@@ -13,7 +13,7 @@ from fastapi import FastAPI
 
 from config import settings
 from routers import tools as tools_router
-from tests.conftest import ESCROW_ADDR, PAYER_ADDR, PROVIDER_ADDR
+from tests.conftest import ECHO_TOOL_DOC, ESCROW_ADDR, PAYER_ADDR, PROVIDER_ADDR
 
 TX = "0x" + "aa" * 32
 
@@ -40,8 +40,7 @@ async def env(monkeypatch, clean_registry, fake_ledger, fake_spend):
     monkeypatch.setattr(settings, "SETTLEMENT_MODE", "async")
     monkeypatch.setattr(settings, "DAILY_SPEND_CAP_UNITS", 0)
 
-    clean_registry.dynamic_routes["/tools/echo"] = {"price": "0.5", "walletAddress": PROVIDER_ADDR, "description": "Echo"}
-    clean_registry.registered_proxies["echo"] = {"type": "proxy", "targetUrl": "http://tool.local/echo", "walletAddress": PROVIDER_ADDR}
+    clean_registry.register(ECHO_TOOL_DOC)
 
     async def verify(*a, **k):
         return {"from_addr": PAYER_ADDR, "to_addr": ESCROW_ADDR, "transfer_amount": 500_000}

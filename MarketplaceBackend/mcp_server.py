@@ -73,7 +73,7 @@ def _client_factory() -> httpx.AsyncClient:
 
 
 def _marketplace_tools() -> list[dict[str, Any]]:
-    return list(registry.marketplace_tools)
+    return registry.marketplace_view()
 
 
 def tool_input_schema(tool: dict[str, Any]) -> dict[str, Any]:
